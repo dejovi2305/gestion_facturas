@@ -12,6 +12,12 @@ if __name__ == "__main__":
     login_window = LoginWindow()
     if login_window.exec() == QDialog.DialogCode.Accepted:
         main_window = MainWindow()
+        # Pasar el nombre del usuario autenticado (si fue capturado)
+        user_name = getattr(login_window, 'logged_username', None)
+        try:
+            main_window.set_user(user_name)
+        except Exception:
+            pass
         main_window.show()
         sys.exit(app.exec())
     else:

@@ -55,6 +55,8 @@ class LoginWindow(QDialog):
             return
 
         if validate_user(nombre_usuario, contrasenna):
+            # Guardar el nombre de usuario para usarlo en la ventana principal
+            self.logged_username = nombre_usuario
             self.accept()
         else:
             QMessageBox.critical(self, "Error", "Usuario ó Contraseña incorrectos")
