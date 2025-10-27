@@ -74,6 +74,16 @@ class CargarFacturaWidget(QWidget):
                     offset_x1=320,
                     offset_y1=85
                 )
+                # Extraer nombre del cliente - Por coordenadas absolutas
+                nombre_cliente = extraer_dato_por_posicion(
+                    pagina=pagina,
+                    etiqueta="SOCIEDAD",  # Primera palabra del nombre
+                    patron_regex=r"([A-ZÁÉÍÓÚÜÑ\s]{15,})",  # Texto en mayúsculas, mínimo 15 caracteres
+                    offset_x0=-5,
+                    offset_y0=-5,
+                    offset_x1=150,
+                    offset_y1=15
+                )
                 
                 self.progress_bar.setValue(80)
                 
@@ -89,8 +99,8 @@ class CargarFacturaWidget(QWidget):
                     
                     resultado = f"===== DATOS EXTRAÍDOS =====\n\n"
                     resultado += f"📄 Número de Cuenta: {numero_cuenta}\n\n"
+                    resultado += f"📄 Nombre del Cliente: {nombre_cliente}\n\n"
                     resultado += f"{'='*30}\n\n"
-                    resultado += f"💾 Base de datos: {mensaje}\n"
                     
                     if cuenta_nueva:
                         resultado += f"✓ Nueva cuenta registrada\n"
