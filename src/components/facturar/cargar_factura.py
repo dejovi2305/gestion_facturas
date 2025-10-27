@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QWidget, QFileDialog, QMessageBox
 from PyQt6.uic import loadUi
 import fitz  # PyMuPDF
 from .factura_helper import extraer_dato_por_posicion
+from config.database import guardar_cuenta_si_no_existe
 
 class CargarFacturaWidget(QWidget):
     def __init__(self, parent=None):
@@ -78,9 +79,24 @@ class CargarFacturaWidget(QWidget):
                 
                 # Mostrar resultado
                 if numero_cuenta:
+                    # Guardar la cuenta en la base de datos
+                    try:
+                        numero_cuenta_int = int(numero_cuenta)
+                        cuenta_nueva, mensaje = guardar_cuenta_si_no_existe(numero_cuenta_int)
+                    except ValueError:
+                        cuenta_nueva = False
+                        mensaje = f"Error: '{numero_cuenta}' no es un número válido"
+                    
                     resultado = f"===== DATOS EXTRAÍDOS =====\n\n"
-                    resultado += f"📄 Número de Cuenta: {numero_cuenta}\n"
-                    resultado += f"\n{'='*30}\n"
+                    resultado += f"📄 Número de Cuenta: {numero_cuenta}\n\n"
+                    resultado += f"{'='*30}\n\n"
+                    resultado += f"💾 Base de datos: {mensaje}\n"
+                    
+                    if cuenta_nueva:
+                        resultado += f"✓ Nueva cuenta registrada\n"
+                    else:
+                        resultado += f"ℹ️ Cuenta existente\n"
+                    
                     self.txt_resultado.setPlainText(resultado)
                 else:
                     self.txt_resultado.setPlainText(
