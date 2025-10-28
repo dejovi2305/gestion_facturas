@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 from PyQt6.QtWidgets import QWidget, QFileDialog, QMessageBox
 from PyQt6.uic import loadUi
 import fitz  # PyMuPDF
@@ -61,30 +62,67 @@ class CargarFacturaWidget(QWidget):
             # Abrir el PDF con PyMuPDF
             documento = fitz.open(self.ruta_pdf)
             self.progress_bar.setValue(50)
-            
             # Extraer número de cuenta de la primera página
             if len(documento) > 0:
                 pagina = documento[0]
-                numero_cuenta = extraer_dato_por_posicion(
-                    pagina=pagina,
-                    etiqueta="Número de Cuenta",
-                    patron_regex=r"\b(\d{6,12})\b",
-                    offset_x0=-40,
-                    offset_y0=5,
-                    offset_x1=320,
-                    offset_y1=85
-                )
-                # Extraer nombre del cliente - Por coordenadas absolutas
-                nombre_cliente = extraer_dato_por_posicion(
-                    pagina=pagina,
-                    etiqueta="SOCIEDAD",  # Primera palabra del nombre
-                    patron_regex=r"([A-ZÁÉÍÓÚÜÑ\s]{15,})",  # Texto en mayúsculas, mínimo 15 caracteres
-                    offset_x0=-5,
-                    offset_y0=-5,
-                    offset_x1=150,
-                    offset_y1=15
-                )
+                # Intentar usar el helper; si falla por 'use_fallback', usar una extracción por texto como backup.
+                try:
+                    numero_cuenta = extraer_dato_por_posicion(
+                        pagina=pagina,
+                        etiqueta="Número de Cuenta",
+                        patron_regex=r"\b(\d{6,12})\b",
+                        offset_x0=-40,
+                        offset_y0=5,
+                        offset_x1=320,
+                        offset_y1=85
+                    )
+                except TypeError as e:
+                    if 'use_fallback' in str(e):
+                        text_page = pagina.get_text("text")
+                        m = re.search(r"\b(\d{6,12})\b", text_page)
+                        numero_cuenta = m.group(1) if m else None
+                    else:
+                        raise
+
+                # Extraer nombre del cliente - Por coordenadas absolutas (con fallback a búsqueda en texto)
+                try:
+                    nombre_cliente = extraer_dato_por_posicion(
+                        pagina=pagina,
+                        etiqueta="SOCIEDAD",  # Primera palabra del nombre
+                        patron_regex=r"([A-ZÁÉÍÓÚÜÑ\s]{15,})",  # Texto en mayúsculas, mínimo 15 caracteres
+                        offset_x0=-5,
+                        offset_y0=-5,
+                        offset_x1=150,
+                        offset_y1=15
+                    )
+                except TypeError as e:
+                    if 'use_fallback' in str(e):
+                        text_page = pagina.get_text("text")
+                        m = re.search(r"([A-ZÁÉÍÓÚÜÑ\s]{15,})", text_page)
+                        nombre_cliente = m.group(1).strip() if m else None
+                    else:
+                        raise
+
+                # Extraer estrato - Buscar cerca de la palabra "Estrato" en la factura
+                try:
+                    estrato = extraer_dato_por_posicion(
+                        pagina=pagina,
+                        etiqueta="Estrato",  # Buscar la palabra "Estrato" que aparece en la factura
+                        patron_regex=r"(Comercial|Residencial|Industrial)",
+                        offset_x0=0,     # Justo después de "Estrato"
+                        offset_y0=0,     # A la misma altura
+                        offset_x1=120,   # Ancho suficiente para capturar "Comercial"
+                        offset_y1=20,    # Altura de una línea
+                    )
+                except TypeError as e:
+                    if 'use_fallback' in str(e):
+                        text_page = pagina.get_text("text")
+                        m = re.search(r"Estrato\s*(Comercial|Residencial|Industrial)", text_page, re.IGNORECASE)
+                        estrato = m.group(1).strip() if m else None
+                    else:
+                        raise
                 
+                self.progress_bar.setValue(80)
                 self.progress_bar.setValue(80)
                 
                 # Mostrar resultado
@@ -100,6 +138,7 @@ class CargarFacturaWidget(QWidget):
                     resultado = f"===== DATOS EXTRAÍDOS =====\n\n"
                     resultado += f"📄 Número de Cuenta: {numero_cuenta}\n\n"
                     resultado += f"📄 Nombre del Cliente: {nombre_cliente}\n\n"
+                    resultado += f"📄 Estrato del Cliente: {estrato}\n\n"
                     resultado += f"{'='*30}\n\n"
                     
                     if cuenta_nueva:
