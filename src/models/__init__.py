@@ -7,3 +7,4 @@ Base = declarative_base()
 # Nota: Los imports al final evitan ciclos durante la importación
 from .usuario import Usuario  # noqa: F401
 from .cuenta import Cuenta  # noqa: F401
+from .cliente import Cliente  # noqa: F401

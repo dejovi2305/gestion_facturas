@@ -6,6 +6,7 @@ from PyQt6.uic import loadUi
 import pdfplumber
 from .factura_helper import extraer_dato_por_posicion
 from config.database import guardar_cuenta_si_no_existe
+from config.database import guardar_cliente_si_no_existe
 
 class CargarFacturaWidget(QWidget):
     def __init__(self, parent=None):
@@ -202,7 +203,20 @@ class CargarFacturaWidget(QWidget):
                             cuenta_nueva = False
                             mensaje = f"Error: '{numero_cuenta}' no es un número válido"
                         
-                        resultado = f"===== DATOS EXTRAÍDOS =====\n\n"
+                        # Guardar cliente si no existe (por número de cuenta)
+                        cliente_nuevo = False
+                        try:
+                            cliente_nuevo, mensaje_cliente = guardar_cliente_si_no_existe(
+                                numero_cuenta=numero_cuenta_int,
+                                nombre=nombre_cliente,
+                                direccion=direccion,
+                                estrato=estrato,
+                                numero_medidor=numero_medidor,
+                            )
+                        except Exception:
+                            mensaje_cliente = "No se pudo registrar/actualizar el cliente"
+                        
+                        resultado = "===== DATOS EXTRAÍDOS =====\n\n"
                         resultado += f"📄 Número de Cuenta: {numero_cuenta}\n\n"
                         resultado += f"👤 Nombre del Cliente: {nombre_cliente}\n\n"
                         resultado += f"📍 Dirección: {direccion}\n\n"
@@ -211,9 +225,20 @@ class CargarFacturaWidget(QWidget):
                         resultado += f"{'='*30}\n\n"
                         
                         if cuenta_nueva:
-                            resultado += f"✓ Nueva cuenta registrada\n"
+                            resultado += "✓ Nueva cuenta registrada\n"
                         else:
-                            resultado += f"ℹ️ Cuenta existente\n"
+                            resultado += "ℹ️ Cuenta existente\n"
+                        
+                        # Mensajes detallados
+                        if 'mensaje' in locals() and mensaje:
+                            resultado += f"   → {mensaje}\n"
+
+                        if cliente_nuevo:
+                            resultado += "✓ Nuevo cliente registrado\n"
+                        else:
+                            resultado += "ℹ️ Cliente existente\n"
+                        if 'mensaje_cliente' in locals() and mensaje_cliente:
+                            resultado += f"   → {mensaje_cliente}\n"
                         
                         self.txt_resultado.setPlainText(resultado)
                     else:

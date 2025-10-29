@@ -4,6 +4,7 @@ from datetime import datetime
 from models import Base
 from models.usuario import Usuario
 from models.cuenta import Cuenta
+from models.cliente import Cliente
 
 # Crear el engine de SQLAlchemy
 DATABASE_URL = "sqlite:///app.db"
@@ -69,6 +70,56 @@ def guardar_cuenta_si_no_existe(numero_cuenta: int) -> tuple[bool, str]:
     except Exception as e:
         db.rollback()
         return (False, f"Error al guardar la cuenta: {str(e)}")
+    finally:
+        db.close()
+
+
+def guardar_cliente_si_no_existe(
+    numero_cuenta: int,
+    nombre: str | None = None,
+    direccion: str | None = None,
+    estrato: str | None = None,
+    numero_medidor: str | None = None,
+) -> tuple[bool, str]:
+    """Crea un Cliente si no existe ya para la cuenta dada.
+
+    Relaciona Cliente.cuenta con Cuenta.numero_cuenta (clave de negocio).
+    Si la cuenta no existe, se crea. Si ya hay cliente para ese número, no inserta.
+
+    Returns: (creado, mensaje)
+    """
+    db = SessionLocal()
+    try:
+        # Asegurar que exista la cuenta (o crearla)
+        cuenta = db.query(Cuenta).filter(Cuenta.numero_cuenta == numero_cuenta).first()
+        if not cuenta:
+            cuenta = Cuenta(numero_cuenta=numero_cuenta, activo=True)
+            db.add(cuenta)
+            db.commit()
+            db.refresh(cuenta)
+
+        # Verificar si ya existe cliente para esta cuenta (por número de cuenta)
+        existente = db.query(Cliente).filter(Cliente.cuenta == numero_cuenta).first()
+        if existente:
+            return (False, f"El cliente de la cuenta {numero_cuenta} ya existe.")
+
+        # Crear cliente usando el número de cuenta como FK
+        cliente = Cliente(
+            cuenta=numero_cuenta,
+            nombre=nombre,
+            direccion=direccion,
+            estrato=estrato,
+            numero_medidor=numero_medidor,
+            activo=True,
+        )
+        db.add(cliente)
+        db.commit()
+        db.refresh(cliente)
+        return (True, f"Cliente creado para la cuenta {numero_cuenta}.")
+
+    except Exception as e:
+        db.rollback()
+        return (False, f"Error al guardar el cliente: {str(e)}")
     finally:
         db.close()
 
