@@ -166,19 +166,21 @@ class CargarFacturaWidget(QWidget):
                     
                     # Extraer dirección
                     # Usando coordenadas absolutas encontradas con el script
-                    # x0=31.7, y0=132.8, x1=158.9, y1=140.8
+                    # Área completa detectada: x0≈31, y0≈136, x1≈180, y1≈143
                     direccion = extraer_dato_por_posicion(
                         pagina=pagina,
                         patron_regex=r"([A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑ0-9\s\.,-]{8,})",
                         x0_absoluto=31,
-                        y0_absoluto=132,
-                        x1_absoluto=167,
-                        y1_absoluto=141
+                        y0_absoluto=136,
+                        x1_absoluto=260,
+                        y1_absoluto=144
                     )
                     if direccion:
                         direccion = " ".join(direccion.split()).strip()
                         # Remover el punto final si existe
                         direccion = direccion.rstrip('.')
+                        # Remover espacios antes de puntos
+                        direccion = direccion.replace(' .', '.')
                     
                     # Extraer estrato
                     estrato = extraer_dato_por_posicion(
@@ -190,6 +192,23 @@ class CargarFacturaWidget(QWidget):
                         offset_x1=120,
                         offset_y1=20
                     )
+                    
+                    # Extraer consumo kWh
+                    # Coordenadas encontradas: x0=34.1, y0=326.7, x1=47.4, y1=334.7
+                    consumo_kwh = extraer_dato_por_posicion(
+                        pagina=pagina,
+                        patron_regex=r"(\d+(?:\.\d+)?)",
+                        x0_absoluto=34,
+                        y0_absoluto=326,
+                        x1_absoluto=48,
+                        y1_absoluto=335
+                    )
+                    # Convertir a número si se encontró
+                    if consumo_kwh:
+                        try:
+                            consumo_kwh = float(consumo_kwh)
+                        except ValueError:
+                            consumo_kwh = None
                     
                     self.progress_bar.setValue(80)
                     
@@ -222,6 +241,7 @@ class CargarFacturaWidget(QWidget):
                         resultado += f"📍 Dirección: {direccion}\n\n"
                         resultado += f"🏢 Estrato: {estrato}\n\n"
                         resultado += f"📄 Número de Medidor: {numero_medidor}\n\n"
+                        resultado += f"⚡ Consumo kWh: {consumo_kwh if consumo_kwh is not None else 'No disponible'}\n\n"
                         resultado += f"{'='*30}\n\n"
                         
                         if cuenta_nueva:
