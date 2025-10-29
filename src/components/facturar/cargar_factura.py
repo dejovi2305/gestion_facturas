@@ -120,9 +120,24 @@ class CargarFacturaWidget(QWidget):
             with pdfplumber.open(self.ruta_pdf) as documento:
                 self.progress_bar.setValue(50)
                 
-                # Extraer datos de la primera página
+                # Extraer datos de la(s) página(s)
                 if len(documento.pages) > 0:
                     pagina = documento.pages[0]
+                    numero_medidor = None
+                    if len(documento.pages) > 1:
+                        pagina2 = documento.pages[1]
+                        
+                        # Extraer número de medidor (página 2) con coordenadas absolutas
+                        # Hallado con el script: palabra '84350535' en aprox
+                        # x0=356.7, y0=752.9, x1=383.2, y1=761.9
+                        numero_medidor = extraer_dato_por_posicion(
+                            pagina=pagina2,
+                            patron_regex=r"\b(\d{6,12})\b",
+                            x0_absoluto=356,
+                            y0_absoluto=752,
+                            x1_absoluto=384,
+                            y1_absoluto=762
+                        )
                     
                     # Extraer número de cuenta
                     numero_cuenta = extraer_dato_por_posicion(
@@ -192,6 +207,7 @@ class CargarFacturaWidget(QWidget):
                         resultado += f"👤 Nombre del Cliente: {nombre_cliente}\n\n"
                         resultado += f"📍 Dirección: {direccion}\n\n"
                         resultado += f"🏢 Estrato: {estrato}\n\n"
+                        resultado += f"📄 Número de Medidor: {numero_medidor}\n\n"
                         resultado += f"{'='*30}\n\n"
                         
                         if cuenta_nueva:

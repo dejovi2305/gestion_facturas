@@ -134,26 +134,33 @@ def modo_interactivo(ruta_pdf):
     
     try:
         with pdfplumber.open(ruta_pdf) as pdf:
-            if len(pdf.pages) == 0:
+            total_paginas = len(pdf.pages)
+            
+            if total_paginas == 0:
                 print("❌ El PDF no contiene páginas.")
                 return
             
-            pagina = pdf.pages[0]
+            # Seleccionar página inicial
+            numero_pagina = 1
+            pagina = pdf.pages[numero_pagina - 1]
             
             print("=" * 80)
             print("BUSCADOR INTERACTIVO DE TEXTO EN PDF")
             print("=" * 80)
-            print(f"\n📄 Dimensiones de la página: {pagina.width:.1f} x {pagina.height:.1f}")
+            print(f"\n📄 Total de páginas en el PDF: {total_paginas}")
+            print(f"📄 Página actual: {numero_pagina}")
+            print(f"📄 Dimensiones de la página: {pagina.width:.1f} x {pagina.height:.1f}")
             print("\nModos de búsqueda:")
             print("  1. Buscar por coordenadas absolutas")
             print("  2. Buscar por etiqueta + offsets")
             print("  3. Mostrar todas las palabras (primeras 50)")
             print("  4. Buscar una palabra específica")
-            print("  5. Salir")
+            print("  5. Cambiar de página")
+            print("  6. Salir")
             
             while True:
                 print("\n" + "-" * 80)
-                opcion = input("\nSelecciona una opción (1-5): ").strip()
+                opcion = input("\nSelecciona una opción (1-6): ").strip()
                 
                 if opcion == "1":
                     # Buscar por coordenadas absolutas
@@ -261,11 +268,27 @@ def modo_interactivo(ruta_pdf):
                         print(f"\n❌ No se encontró '{buscar}' en el PDF.")
                 
                 elif opcion == "5":
-                    print("\n👋 ¡Hasta luego!")
+                    # Cambiar de página
+                    print(f"\nPágina actual: {numero_pagina} de {total_paginas}")
+                    try:
+                        nueva_pagina = int(input(f"Ingresa el número de página (1-{total_paginas}): "))
+                        
+                        if nueva_pagina < 1 or nueva_pagina > total_paginas:
+                            print(f"❌ Número de página inválido. Debe estar entre 1 y {total_paginas}")
+                        else:
+                            numero_pagina = nueva_pagina
+                            pagina = pdf.pages[numero_pagina - 1]
+                            print(f"\n✓ Cambiado a página {numero_pagina}")
+                            print(f"� Dimensiones: {pagina.width:.1f} x {pagina.height:.1f}")
+                    except ValueError:
+                        print("❌ Error: Ingresa un número válido.")
+                
+                elif opcion == "6":
+                    print("\n�👋 ¡Hasta luego!")
                     break
                 
                 else:
-                    print("❌ Opción inválida. Selecciona 1-5.")
+                    print("❌ Opción inválida. Selecciona 1-6.")
     
     except FileNotFoundError:
         print(f"❌ Error: No se encontró el archivo '{ruta_pdf}'")
