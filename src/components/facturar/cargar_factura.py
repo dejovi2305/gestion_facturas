@@ -210,6 +210,43 @@ class CargarFacturaWidget(QWidget):
                         except ValueError:
                             consumo_kwh = None
                     
+                    # Extraer valor kWh (precio por kWh)
+                    # Coordenadas: x0=70, y0=327, x1=100, y1=336
+                    valor_kwh = extraer_dato_por_posicion(
+                        pagina=pagina,
+                        patron_regex=r"(\d+(?:,\d+)?(?:\.\d+)?)",
+                        x0_absoluto=70,
+                        y0_absoluto=327,
+                        x1_absoluto=100,
+                        y1_absoluto=336
+                    )
+                    # Convertir a número si se encontró
+                    if valor_kwh:
+                        try:
+                            # Reemplazar coma por punto para formato decimal
+                            valor_kwh = float(valor_kwh.replace(',', '.'))
+                        except (ValueError, AttributeError):
+                            valor_kwh = None
+                    
+                    # Extraer valor total
+                    # Coordenadas: x0=326, y0=216, x1=389, y1=232.5
+                    valor_total = extraer_dato_por_posicion(
+                        pagina=pagina,
+                        patron_regex=r"(\$?\d+(?:[.,]\d+)*(?:[.,]\d+)?)",
+                        x0_absoluto=326,
+                        y0_absoluto=216,
+                        x1_absoluto=389,
+                        y1_absoluto=233
+                    )
+                    # Convertir a número si se encontró
+                    if valor_total:
+                        try:
+                            # Limpiar el valor: remover $ y puntos de miles, cambiar coma por punto
+                            valor_total = valor_total.replace('$', '').replace('.', '').replace(',', '.')
+                            valor_total = float(valor_total)
+                        except (ValueError, AttributeError):
+                            valor_total = None
+                    
                     self.progress_bar.setValue(80)
                     
                     # Mostrar resultado
@@ -242,6 +279,8 @@ class CargarFacturaWidget(QWidget):
                         resultado += f"🏢 Estrato: {estrato}\n\n"
                         resultado += f"📄 Número de Medidor: {numero_medidor}\n\n"
                         resultado += f"⚡ Consumo kWh: {consumo_kwh if consumo_kwh is not None else 'No disponible'}\n\n"
+                        resultado += f"💰 Valor kWh: ${valor_kwh if valor_kwh is not None else 'No disponible'}\n\n"
+                        resultado += f"💵 Valor Total: ${valor_total if valor_total is not None else 'No disponible'}\n\n"
                         resultado += f"{'='*30}\n\n"
                         
                         if cuenta_nueva:
