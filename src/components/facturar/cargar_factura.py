@@ -5,6 +5,16 @@ from PyQt6.QtWidgets import QWidget, QFileDialog, QMessageBox
 from PyQt6.uic import loadUi
 import pdfplumber
 from .factura_helper import extraer_dato_por_posicion
+from .factura_helperV2 import (
+    extraer_numero_cuenta,
+    extraer_nombre_cliente,
+    extraer_direccion_cliente,
+    extraer_estrato_cliente,
+    extraer_numero_medidor,
+    extraer_consumo_kwh,
+    extraer_valor_kwh,
+    extraer_fecha_maxima_pago,
+)
 from config.database import guardar_cuenta_si_no_existe
 from config.database import guardar_cliente_si_no_existe
 
@@ -26,31 +36,31 @@ class CargarFacturaWidget(QWidget):
         loadUi(ui_path, self)
         
         # Variables de instancia
-        self.ruta_pdf = None
+        self.ruta_archivo = None  # Puede ser PDF o XML
         
         # Conectar señales
         self.btn_seleccionar.clicked.connect(self._seleccionar_archivo)
-        self.btn_procesar.clicked.connect(self._procesar_pdf_extraer_datos)  # Cambio a la función de extracción
+        self.btn_procesar.clicked.connect(self._procesar_archivo)  # Decide por tipo (PDF/XML) y delega a métodos separados
         # Si quieres la versión debug, cambia a: self._procesar_pdf
     
     def _seleccionar_archivo(self):
-        """Abre un diálogo para seleccionar el archivo PDF de la factura."""
+        """Abre un diálogo para seleccionar el archivo de la factura (PDF o XML)."""
         archivo, _ = QFileDialog.getOpenFileName(
             self,
-            "Seleccionar Factura PDF",
+            "Seleccionar Factura (PDF o XML)",
             "",
-            "Archivos PDF (*.pdf)"
+            "Archivos PDF o XML (*.pdf *.xml);;PDF (*.pdf);;XML (*.xml)"
         )
         
         if archivo:
-            self.ruta_pdf = archivo
+            self.ruta_archivo = archivo
             self.txt_ruta_archivo.setText(archivo)
             self.btn_procesar.setEnabled(True)
             self.txt_resultado.clear()
     
     def _procesar_pdf(self):
         """VERSIÓN DEBUG: Extrae y muestra todo el texto del PDF."""
-        if not self.ruta_pdf:
+        if not self.ruta_archivo:
             QMessageBox.warning(self, "Error", "No se ha seleccionado ningún archivo PDF.")
             return
         
@@ -62,7 +72,7 @@ class CargarFacturaWidget(QWidget):
             self.txt_resultado.setPlainText("Procesando PDF...")
             
             # Abrir el PDF con pdfplumber
-            with pdfplumber.open(self.ruta_pdf) as documento:
+            with pdfplumber.open(self.ruta_archivo) as documento:
                 self.progress_bar.setValue(50)
                 
                 # FUNCIÓN TEMPORAL: Extraer todo el texto del PDF
@@ -104,10 +114,25 @@ class CargarFacturaWidget(QWidget):
             self.progress_bar.setVisible(False)
             self.progress_bar.setValue(0)
     
+    def _procesar_archivo(self):
+        """Decide el flujo según el tipo de archivo (PDF o XML) y delega al método correspondiente."""
+        if not self.ruta_archivo:
+            QMessageBox.warning(self, "Error", "No se ha seleccionado ningún archivo.")
+            return
+
+        _, ext = os.path.splitext(self.ruta_archivo)
+        if ext.lower() == ".xml":
+            return self._procesar_xml_extraer_datos()
+        elif ext.lower() == ".pdf":
+            return self._procesar_pdf_extraer_datos()
+        else:
+            QMessageBox.warning(self, "Tipo de archivo no soportado", "Selecciona un archivo .pdf o .xml")
+            return
+
     def _procesar_pdf_extraer_datos(self):
-        """Procesa el archivo PDF y extrae datos específicos de la factura."""
-        if not self.ruta_pdf:
-            QMessageBox.warning(self, "Error", "No se ha seleccionado ningún archivo PDF.")
+        """Procesa un archivo PDF y extrae datos específicos de la factura."""
+        if not self.ruta_archivo:
+            QMessageBox.warning(self, "Error", "No se ha seleccionado ningún archivo.")
             return
         
         try:
@@ -118,7 +143,7 @@ class CargarFacturaWidget(QWidget):
             self.txt_resultado.setPlainText("Procesando PDF...")
             
             # Abrir el PDF con pdfplumber
-            with pdfplumber.open(self.ruta_pdf) as documento:
+            with pdfplumber.open(self.ruta_archivo) as documento:
                 self.progress_bar.setValue(50)
                 
                 # Extraer datos de la(s) página(s)
@@ -315,6 +340,136 @@ class CargarFacturaWidget(QWidget):
                 self,
                 "Error",
                 f"Error al procesar el PDF:\n{str(e)}"
+            )
+            self.txt_resultado.setPlainText(f"Error: {str(e)}")
+        finally:
+            self.progress_bar.setVisible(False)
+            self.progress_bar.setValue(0)
+
+    def _procesar_xml_extraer_datos(self):
+        """Procesa el archivo XML y extrae datos específicos usando el helper V2."""
+        try:
+            self.progress_bar.setVisible(True)
+            self.progress_bar.setValue(20)
+            self.txt_resultado.clear()
+            self.txt_resultado.setPlainText("Procesando XML...")
+
+            numero_cuenta, detalles = extraer_numero_cuenta(self.ruta_archivo)
+            nombre_cliente, detalles_nombre = extraer_nombre_cliente(self.ruta_archivo)
+            direccion, detalles_dir = extraer_direccion_cliente(self.ruta_archivo)
+            estrato, detalles_estrato = extraer_estrato_cliente(self.ruta_archivo)
+            numero_medidor, detalles_medidor = extraer_numero_medidor(self.ruta_archivo)
+            consumo_kwh_lista, detalles_consumo = extraer_consumo_kwh(self.ruta_archivo)
+            valor_kwh_lista, detalles_valor = extraer_valor_kwh(self.ruta_archivo)
+            fecha_maxima_pago, detalles_fecha = extraer_fecha_maxima_pago(self.ruta_archivo)
+
+            self.progress_bar.setValue(70)
+
+            if numero_cuenta:
+                resultado = "===== DATOS EXTRAÍDOS (XML) =====\n\n"
+                resultado += f"📄 Número de Cuenta: {numero_cuenta}\n\n"
+                if nombre_cliente:
+                    resultado += f"👤 Nombre del Cliente: {nombre_cliente}\n\n"
+                if direccion:
+                    resultado += f"📍 Dirección: {direccion}\n\n"
+                if estrato is not None:
+                    resultado += f"🏢 Estrato: {estrato}\n\n"
+                if numero_medidor:
+                    resultado += f"📄 Número de Medidor: {numero_medidor}\n\n"
+                
+                # Mostrar consumo y valor kWh
+                if consumo_kwh_lista:
+                    resultado += "⚡ Consumo kWh por línea:\n"
+                    for i, consumo in enumerate(consumo_kwh_lista, 1):
+                        resultado += f"   Línea {i}: {consumo} kWh\n"
+                    resultado += "\n"
+                
+                if valor_kwh_lista:
+                    resultado += "💰 Valor kWh por línea:\n"
+                    for i, valor in enumerate(valor_kwh_lista, 1):
+                        resultado += f"   Línea {i}: ${valor:,.2f} COP\n"
+                    resultado += "\n"
+                
+                if fecha_maxima_pago:
+                    resultado += f"📅 Fecha Máxima de Pago: {fecha_maxima_pago}\n\n"
+                
+                resultado += "Detalles de hallazgos (valor, ruta):\n"
+                for val, ruta in detalles:
+                    resultado += f"  - {val} @ {ruta}\n"
+                if detalles_nombre:
+                    resultado += "\nDetalles de hallazgos de nombre (valor, ruta):\n"
+                    for val, ruta in detalles_nombre:
+                        resultado += f"  - {val} @ {ruta}\n"
+                if detalles_dir:
+                    resultado += "\nDetalles de hallazgos de dirección (valor, ruta):\n"
+                    for val, ruta in detalles_dir:
+                        resultado += f"  - {val} @ {ruta}\n"
+                if detalles_estrato:
+                    resultado += "\nDetalles de hallazgos de estrato (valor, ruta):\n"
+                    for val, ruta in detalles_estrato:
+                        resultado += f"  - {val} @ {ruta}\n"
+                if detalles_medidor:
+                    resultado += "\nDetalles de hallazgos de medidor (valor, ruta):\n"
+                    for val, ruta in detalles_medidor:
+                        resultado += f"  - {val} @ {ruta}\n"
+                
+                if detalles_consumo:
+                    resultado += "\nDetalles de hallazgos de consumo kWh (valor, ruta):\n"
+                    for val, ruta in detalles_consumo:
+                        resultado += f"  - {val} @ {ruta}\n"
+                
+                if detalles_valor:
+                    resultado += "\nDetalles de hallazgos de valor kWh (valor, ruta):\n"
+                    for val, ruta in detalles_valor:
+                        resultado += f"  - {val} @ {ruta}\n"
+                
+                if detalles_fecha:
+                    resultado += "\nDetalles de hallazgos de fecha máxima de pago (valor, ruta):\n"
+                    for val, ruta in detalles_fecha:
+                        resultado += f"  - {val} @ {ruta}\n"
+
+                # Guardar la cuenta en la base de datos
+                try:
+                    numero_cuenta_int = int(numero_cuenta)
+                    cuenta_nueva, mensaje = guardar_cuenta_si_no_existe(numero_cuenta_int)
+                    resultado += "\n"
+                    if cuenta_nueva:
+                        resultado += "✓ Nueva cuenta registrada\n"
+                    else:
+                        resultado += "ℹ️ Cuenta existente\n"
+                    if mensaje:
+                        resultado += f"   → {mensaje}\n"
+                except Exception as e:
+                    resultado += f"\n⚠️ No se pudo registrar la cuenta: {e}\n"
+
+                # Guardar/actualizar cliente con valores (permitiendo None si no existen)
+                try:
+                    cliente_nuevo, mensaje_cliente = guardar_cliente_si_no_existe(
+                        numero_cuenta=numero_cuenta_int,
+                        nombre=nombre_cliente if nombre_cliente else None,
+                        direccion=direccion if direccion else None,
+                        estrato=str(estrato) if estrato is not None else None,
+                        numero_medidor=numero_medidor if numero_medidor else None,
+                    )
+                    if cliente_nuevo:
+                        resultado += "✓ Nuevo cliente registrado\n"
+                    else:
+                        resultado += "ℹ️ Cliente existente\n"
+                    if mensaje_cliente:
+                        resultado += f"   → {mensaje_cliente}\n"
+                except Exception as e:
+                    resultado += f"⚠️ No se pudo registrar/actualizar el cliente: {e}\n"
+
+                self.txt_resultado.setPlainText(resultado)
+            else:
+                self.txt_resultado.setPlainText("No se encontró número de cuenta en el XML.")
+
+            self.progress_bar.setValue(100)
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Error al procesar el XML:\n{str(e)}"
             )
             self.txt_resultado.setPlainText(f"Error: {str(e)}")
         finally:
