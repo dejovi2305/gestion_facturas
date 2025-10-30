@@ -488,6 +488,54 @@ def extraer_valor_kwh(ruta_archivo: str) -> Tuple[Optional[List[float]], List[Tu
         return None, []
 
 
+def extraer_valor_total(ruta_archivo: str) -> Tuple[Optional[float], List[Tuple[str, str]]]:
+    """
+    Extrae el valor total (LineExtensionAmount) desde cac:LegalMonetaryTotal.
+
+    Returns:
+        (valor_total_float, detalles) donde valor_total_float es un float o None.
+    """
+    valor_str, detalles = extraer_valor_xml(
+        ruta_archivo=ruta_archivo,
+        targets=[
+            {"tag": "LineExtensionAmount", "ruta_contiene": ["LegalMonetaryTotal/LineExtensionAmount"]},
+        ],
+        validar=lambda s: bool(re.fullmatch(r"\d+(?:\.\d+)?", s.strip()) if s else False),
+        incluir_embebidos=True,
+        fallback_regex=r"\d+(?:\.\d+)?",
+    )
+    if valor_str is None:
+        return None, detalles
+    try:
+        return float(valor_str), detalles
+    except Exception:
+        return None, detalles
+
+
+def extraer_valor_total_pagar(ruta_archivo: str) -> Tuple[Optional[float], List[Tuple[str, str]]]:
+    """
+    Extrae el valor total a pagar (PayableAmount) desde cac:LegalMonetaryTotal.
+
+    Returns:
+        (valor_total_pagar_float, detalles) donde valor_total_pagar_float es un float o None.
+    """
+    valor_str, detalles = extraer_valor_xml(
+        ruta_archivo=ruta_archivo,
+        targets=[
+            {"tag": "PayableAmount", "ruta_contiene": ["LegalMonetaryTotal/PayableAmount"]},
+        ],
+        validar=lambda s: bool(re.fullmatch(r"\d+(?:\.\d+)?", s.strip()) if s else False),
+        incluir_embebidos=True,
+        fallback_regex=r"\d+(?:\.\d+)?",
+    )
+    if valor_str is None:
+        return None, detalles
+    try:
+        return float(valor_str), detalles
+    except Exception:
+        return None, detalles
+
+
 def _coincide_target(tag: str, ruta: str, elem: ET.Element, target: Dict[str, Any]) -> bool:
     """Evalúa si un elemento coincide con un target de búsqueda."""
     if target.get("tag") and tag != target["tag"]:

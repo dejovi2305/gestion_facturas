@@ -13,6 +13,8 @@ from .factura_helperV2 import (
     extraer_numero_medidor,
     extraer_consumo_kwh,
     extraer_valor_kwh,
+    extraer_valor_total,
+    extraer_valor_total_pagar,
     extraer_fecha_maxima_pago,
 )
 from config.database import guardar_cuenta_si_no_existe
@@ -362,6 +364,8 @@ class CargarFacturaWidget(QWidget):
             consumo_kwh_lista, detalles_consumo = extraer_consumo_kwh(self.ruta_archivo)
             valor_kwh_lista, detalles_valor = extraer_valor_kwh(self.ruta_archivo)
             fecha_maxima_pago, detalles_fecha = extraer_fecha_maxima_pago(self.ruta_archivo)
+            valor_total_xml, detalles_total = extraer_valor_total(self.ruta_archivo)
+            valor_total_pagar_xml, detalles_total_pagar = extraer_valor_total_pagar(self.ruta_archivo)
 
             self.progress_bar.setValue(70)
 
@@ -392,6 +396,11 @@ class CargarFacturaWidget(QWidget):
                 
                 if fecha_maxima_pago:
                     resultado += f"📅 Fecha Máxima de Pago: {fecha_maxima_pago}\n\n"
+
+                if valor_total_xml is not None:
+                    resultado += f"💵 Valor Total (LineExtensionAmount): ${valor_total_xml:,.2f} COP\n"
+                if valor_total_pagar_xml is not None:
+                    resultado += f"🧾 Valor Total a Pagar (PayableAmount): ${valor_total_pagar_xml:,.2f} COP\n\n"
                 
                 resultado += "Detalles de hallazgos (valor, ruta):\n"
                 for val, ruta in detalles:
@@ -426,6 +435,15 @@ class CargarFacturaWidget(QWidget):
                 if detalles_fecha:
                     resultado += "\nDetalles de hallazgos de fecha máxima de pago (valor, ruta):\n"
                     for val, ruta in detalles_fecha:
+                        resultado += f"  - {val} @ {ruta}\n"
+
+                if detalles_total:
+                    resultado += "\nDetalles de hallazgos de valor total (LineExtensionAmount):\n"
+                    for val, ruta in detalles_total:
+                        resultado += f"  - {val} @ {ruta}\n"
+                if detalles_total_pagar:
+                    resultado += "\nDetalles de hallazgos de valor total a pagar (PayableAmount):\n"
+                    for val, ruta in detalles_total_pagar:
                         resultado += f"  - {val} @ {ruta}\n"
 
                 # Guardar la cuenta en la base de datos
