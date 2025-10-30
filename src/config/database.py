@@ -37,6 +37,24 @@ def initialize_database():
         db.close()
 
 
+def existe_cuenta(numero_cuenta: int) -> bool:
+    """Devuelve True si existe una Cuenta con ese número de cuenta."""
+    db = SessionLocal()
+    try:
+        return db.query(Cuenta).filter(Cuenta.numero_cuenta == numero_cuenta).first() is not None
+    finally:
+        db.close()
+
+
+def existe_cliente_para_cuenta(numero_cuenta: int) -> bool:
+    """Devuelve True si existe un Cliente asociado al número de cuenta dado."""
+    db = SessionLocal()
+    try:
+        return db.query(Cliente).filter(Cliente.cuenta == numero_cuenta).first() is not None
+    finally:
+        db.close()
+
+
 def guardar_cuenta_si_no_existe(numero_cuenta: int) -> tuple[bool, str]:
     """Guarda una cuenta en la base de datos si no existe.
     

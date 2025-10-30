@@ -20,6 +20,7 @@ from .factura_helperV2 import (
 from config.database import guardar_cuenta_si_no_existe
 from config.database import guardar_cliente_si_no_existe
 from config.database import guardar_consumo
+from config.database import existe_cuenta, existe_cliente_para_cuenta
 
 class CargarFacturaWidget(QWidget):
     def __init__(self, parent=None):
@@ -152,23 +153,8 @@ class CargarFacturaWidget(QWidget):
                 # Extraer datos de la(s) página(s)
                 if len(documento.pages) > 0:
                     pagina = documento.pages[0]
-                    numero_medidor = None
-                    if len(documento.pages) > 1:
-                        pagina2 = documento.pages[1]
-                        
-                        # Extraer número de medidor (página 2) con coordenadas absolutas
-                        # Hallado con el script: palabra '84350535' en aprox
-                        # x0=356.7, y0=752.9, x1=383.2, y1=761.9
-                        numero_medidor = extraer_dato_por_posicion(
-                            pagina=pagina2,
-                            patron_regex=r"\b(\d{6,12})\b",
-                            x0_absoluto=356,
-                            y0_absoluto=752,
-                            x1_absoluto=384,
-                            y1_absoluto=762
-                        )
                     
-                    # Extraer número de cuenta
+                    # Extraer número de cuenta PRIMERO para decidir el flujo
                     numero_cuenta = extraer_dato_por_posicion(
                         pagina=pagina,
                         etiqueta="Número de Cuenta",
@@ -179,47 +165,74 @@ class CargarFacturaWidget(QWidget):
                         offset_y1=85
                     )
                     
-                    # Extraer nombre del cliente
-                    # Usando coordenadas absolutas encontradas con el script
-                    nombre_cliente = extraer_dato_por_posicion(
-                        pagina=pagina,
-                        patron_regex=r"([A-ZÁÉÍÓÚÜÑ\s]{10,})",
-                        x0_absoluto=30,
-                        y0_absoluto=108,
-                        x1_absoluto=190,
-                        y1_absoluto=120
-                    )
-                    if nombre_cliente:
-                        nombre_cliente = " ".join(nombre_cliente.split()).strip()
+                    numero_medidor = None
+                    cuenta_existe = cliente_existe = False
+                    try:
+                        if numero_cuenta:
+                            numero_cuenta_int = int(numero_cuenta)
+                            cuenta_existe = existe_cuenta(numero_cuenta_int)
+                            cliente_existe = existe_cliente_para_cuenta(numero_cuenta_int)
+                    except Exception:
+                        pass
+                    
+                    # Solo extraer número de medidor si se requiere datos de cliente
+                    if not (cuenta_existe and cliente_existe):
+                        if len(documento.pages) > 1:
+                            pagina2 = documento.pages[1]
+                            # Extraer número de medidor (página 2) con coordenadas absolutas
+                            numero_medidor = extraer_dato_por_posicion(
+                                pagina=pagina2,
+                                patron_regex=r"\b(\d{6,12})\b",
+                                x0_absoluto=356,
+                                y0_absoluto=752,
+                                x1_absoluto=384,
+                                y1_absoluto=762
+                            )
+                    
+                    nombre_cliente = None
+                    if not (cuenta_existe and cliente_existe):
+                        # Extraer nombre del cliente (solo si hace falta)
+                        nombre_cliente = extraer_dato_por_posicion(
+                            pagina=pagina,
+                            patron_regex=r"([A-ZÁÉÍÓÚÜÑ\s]{10,})",
+                            x0_absoluto=30,
+                            y0_absoluto=108,
+                            x1_absoluto=190,
+                            y1_absoluto=120
+                        )
+                        if nombre_cliente:
+                            nombre_cliente = " ".join(nombre_cliente.split()).strip()
                     
                     # Extraer dirección
                     # Usando coordenadas absolutas encontradas con el script
                     # Área completa detectada: x0≈31, y0≈136, x1≈180, y1≈143
-                    direccion = extraer_dato_por_posicion(
-                        pagina=pagina,
-                        patron_regex=r"([A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑ0-9\s\.,-]{8,})",
-                        x0_absoluto=31,
-                        y0_absoluto=136,
-                        x1_absoluto=260,
-                        y1_absoluto=144
-                    )
-                    if direccion:
-                        direccion = " ".join(direccion.split()).strip()
-                        # Remover el punto final si existe
-                        direccion = direccion.rstrip('.')
-                        # Remover espacios antes de puntos
-                        direccion = direccion.replace(' .', '.')
+                    direccion = None
+                    if not (cuenta_existe and cliente_existe):
+                        direccion = extraer_dato_por_posicion(
+                            pagina=pagina,
+                            patron_regex=r"([A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑ0-9\s\.,-]{8,})",
+                            x0_absoluto=31,
+                            y0_absoluto=136,
+                            x1_absoluto=260,
+                            y1_absoluto=144
+                        )
+                        if direccion:
+                            direccion = " ".join(direccion.split()).strip()
+                            direccion = direccion.rstrip('.')
+                            direccion = direccion.replace(' .', '.')
                     
                     # Extraer estrato
-                    estrato = extraer_dato_por_posicion(
-                        pagina=pagina,
-                        etiqueta="Estrato",
-                        patron_regex=r"(Comercial|Residencial|Industrial)",
-                        offset_x0=0,
-                        offset_y0=0,
-                        offset_x1=120,
-                        offset_y1=20
-                    )
+                    estrato = None
+                    if not (cuenta_existe and cliente_existe):
+                        estrato = extraer_dato_por_posicion(
+                            pagina=pagina,
+                            etiqueta="Estrato",
+                            patron_regex=r"(Comercial|Residencial|Industrial)",
+                            offset_x0=0,
+                            offset_y0=0,
+                            offset_x1=120,
+                            offset_y1=20
+                        )
                     
                     # Extraer consumo kWh
                     # Coordenadas encontradas: x0=34.1, y0=326.7, x1=47.4, y1=334.7
@@ -279,33 +292,43 @@ class CargarFacturaWidget(QWidget):
                     
                     # Mostrar resultado
                     if numero_cuenta:
-                        # Guardar la cuenta en la base de datos
+                        # Guardar/validar cuenta
                         try:
                             numero_cuenta_int = int(numero_cuenta)
-                            cuenta_nueva, mensaje = guardar_cuenta_si_no_existe(numero_cuenta_int)
+                            if cuenta_existe:
+                                cuenta_nueva, mensaje = False, "Cuenta existente"
+                            else:
+                                cuenta_nueva, mensaje = guardar_cuenta_si_no_existe(numero_cuenta_int)
                         except ValueError:
                             cuenta_nueva = False
                             mensaje = f"Error: '{numero_cuenta}' no es un número válido"
                         
-                        # Guardar cliente si no existe (por número de cuenta)
+                        # Guardar cliente sólo si no existe
                         cliente_nuevo = False
                         try:
-                            cliente_nuevo, mensaje_cliente = guardar_cliente_si_no_existe(
-                                numero_cuenta=numero_cuenta_int,
-                                nombre=nombre_cliente,
-                                direccion=direccion,
-                                estrato=estrato,
-                                numero_medidor=numero_medidor,
-                            )
+                            if not cliente_existe:
+                                cliente_nuevo, mensaje_cliente = guardar_cliente_si_no_existe(
+                                    numero_cuenta=numero_cuenta_int,
+                                    nombre=nombre_cliente,
+                                    direccion=direccion,
+                                    estrato=estrato,
+                                    numero_medidor=numero_medidor,
+                                )
+                            else:
+                                mensaje_cliente = "Cliente existente"
                         except Exception:
                             mensaje_cliente = "No se pudo registrar/actualizar el cliente"
                         
                         resultado = "===== DATOS EXTRAÍDOS =====\n\n"
                         resultado += f"📄 Número de Cuenta: {numero_cuenta}\n\n"
-                        resultado += f"👤 Nombre del Cliente: {nombre_cliente}\n\n"
-                        resultado += f"📍 Dirección: {direccion}\n\n"
-                        resultado += f"🏢 Estrato: {estrato}\n\n"
-                        resultado += f"📄 Número de Medidor: {numero_medidor}\n\n"
+                        if nombre_cliente:
+                            resultado += f"👤 Nombre del Cliente: {nombre_cliente}\n\n"
+                        if direccion:
+                            resultado += f"📍 Dirección: {direccion}\n\n"
+                        if estrato:
+                            resultado += f"🏢 Estrato: {estrato}\n\n"
+                        if numero_medidor:
+                            resultado += f"📄 Número de Medidor: {numero_medidor}\n\n"
                         resultado += f"⚡ Consumo kWh: {consumo_kwh if consumo_kwh is not None else 'No disponible'}\n\n"
                         resultado += f"💰 Valor kWh: ${valor_kwh if valor_kwh is not None else 'No disponible'}\n\n"
                         resultado += f"💵 Valor Total: ${valor_total if valor_total is not None else 'No disponible'}\n\n"
@@ -357,11 +380,59 @@ class CargarFacturaWidget(QWidget):
             self.txt_resultado.clear()
             self.txt_resultado.setPlainText("Procesando XML...")
 
+            # 1) Siempre: extraer número de cuenta primero
             numero_cuenta, detalles = extraer_numero_cuenta(self.ruta_archivo)
-            nombre_cliente, detalles_nombre = extraer_nombre_cliente(self.ruta_archivo)
-            direccion, detalles_dir = extraer_direccion_cliente(self.ruta_archivo)
-            estrato, detalles_estrato = extraer_estrato_cliente(self.ruta_archivo)
-            numero_medidor, detalles_medidor = extraer_numero_medidor(self.ruta_archivo)
+            if not numero_cuenta:
+                self.txt_resultado.setPlainText("No se encontró número de cuenta en el XML.")
+                self.progress_bar.setValue(100)
+                return
+
+            # 2) Consultar existencia en BD
+            try:
+                numero_cuenta_int = int(numero_cuenta)
+            except Exception:
+                self.txt_resultado.setPlainText(f"Número de cuenta inválido: {numero_cuenta}")
+                self.progress_bar.setValue(100)
+                return
+
+            cuenta_existe = existe_cuenta(numero_cuenta_int)
+            cliente_existe = existe_cliente_para_cuenta(numero_cuenta_int)
+
+            # Variables por si se requieren
+            nombre_cliente = direccion = estrato = numero_medidor = None
+            detalles_nombre = detalles_dir = detalles_estrato = detalles_medidor = []
+
+            # 3) Si no existen, extraer datos de Cliente y persistir
+            if not (cuenta_existe and cliente_existe):
+                nombre_cliente, detalles_nombre = extraer_nombre_cliente(self.ruta_archivo)
+                direccion, detalles_dir = extraer_direccion_cliente(self.ruta_archivo)
+                estrato, detalles_estrato = extraer_estrato_cliente(self.ruta_archivo)
+                numero_medidor, detalles_medidor = extraer_numero_medidor(self.ruta_archivo)
+
+                # Guardar la cuenta si no existe
+                try:
+                    cuenta_nueva, mensaje = guardar_cuenta_si_no_existe(numero_cuenta_int)
+                except Exception as e:
+                    cuenta_nueva, mensaje = False, f"Error registrando cuenta: {e}"
+
+                # Guardar/actualizar cliente
+                try:
+                    cliente_nuevo, mensaje_cliente = guardar_cliente_si_no_existe(
+                        numero_cuenta=numero_cuenta_int,
+                        nombre=nombre_cliente if nombre_cliente else None,
+                        direccion=direccion if direccion else None,
+                        estrato=str(estrato) if estrato is not None else None,
+                        numero_medidor=numero_medidor if numero_medidor else None,
+                    )
+                except Exception as e:
+                    cliente_nuevo, mensaje_cliente = False, f"Error cliente: {e}"
+            else:
+                cuenta_nueva = False
+                mensaje = "Cuenta existente"
+                cliente_nuevo = False
+                mensaje_cliente = "Cliente existente"
+
+            # 4) Extraer SIEMPRE datos de consumo
             consumo_kwh_lista, detalles_consumo = extraer_consumo_kwh(self.ruta_archivo)
             valor_kwh_lista, detalles_valor = extraer_valor_kwh(self.ruta_archivo)
             fecha_maxima_pago, detalles_fecha = extraer_fecha_maxima_pago(self.ruta_archivo)
@@ -373,14 +444,15 @@ class CargarFacturaWidget(QWidget):
             if numero_cuenta:
                 resultado = "===== DATOS EXTRAÍDOS (XML) =====\n\n"
                 resultado += f"📄 Número de Cuenta: {numero_cuenta}\n\n"
-                if nombre_cliente:
-                    resultado += f"👤 Nombre del Cliente: {nombre_cliente}\n\n"
-                if direccion:
-                    resultado += f"📍 Dirección: {direccion}\n\n"
-                if estrato is not None:
-                    resultado += f"🏢 Estrato: {estrato}\n\n"
-                if numero_medidor:
-                    resultado += f"📄 Número de Medidor: {numero_medidor}\n\n"
+                if not (cuenta_existe and cliente_existe):
+                    if nombre_cliente:
+                        resultado += f"👤 Nombre del Cliente: {nombre_cliente}\n\n"
+                    if direccion:
+                        resultado += f"📍 Dirección: {direccion}\n\n"
+                    if estrato is not None:
+                        resultado += f"🏢 Estrato: {estrato}\n\n"
+                    if numero_medidor:
+                        resultado += f"📄 Número de Medidor: {numero_medidor}\n\n"
                 
                 # Mostrar consumo y valor kWh
                 if consumo_kwh_lista:
@@ -447,37 +519,21 @@ class CargarFacturaWidget(QWidget):
                     for val, ruta in detalles_total_pagar:
                         resultado += f"  - {val} @ {ruta}\n"
 
-                # Guardar la cuenta en la base de datos
-                try:
-                    numero_cuenta_int = int(numero_cuenta)
-                    cuenta_nueva, mensaje = guardar_cuenta_si_no_existe(numero_cuenta_int)
-                    resultado += "\n"
-                    if cuenta_nueva:
-                        resultado += "✓ Nueva cuenta registrada\n"
-                    else:
-                        resultado += "ℹ️ Cuenta existente\n"
-                    if mensaje:
-                        resultado += f"   → {mensaje}\n"
-                except Exception as e:
-                    resultado += f"\n⚠️ No se pudo registrar la cuenta: {e}\n"
+                # Reportar estado de cuenta/cliente según caso
+                resultado += "\n"
+                if cuenta_nueva:
+                    resultado += "✓ Nueva cuenta registrada\n"
+                else:
+                    resultado += "ℹ️ Cuenta existente\n"
+                if mensaje:
+                    resultado += f"   → {mensaje}\n"
 
-                # Guardar/actualizar cliente con valores (permitiendo None si no existen)
-                try:
-                    cliente_nuevo, mensaje_cliente = guardar_cliente_si_no_existe(
-                        numero_cuenta=numero_cuenta_int,
-                        nombre=nombre_cliente if nombre_cliente else None,
-                        direccion=direccion if direccion else None,
-                        estrato=str(estrato) if estrato is not None else None,
-                        numero_medidor=numero_medidor if numero_medidor else None,
-                    )
-                    if cliente_nuevo:
-                        resultado += "✓ Nuevo cliente registrado\n"
-                    else:
-                        resultado += "ℹ️ Cliente existente\n"
-                    if mensaje_cliente:
-                        resultado += f"   → {mensaje_cliente}\n"
-                except Exception as e:
-                    resultado += f"⚠️ No se pudo registrar/actualizar el cliente: {e}\n"
+                if cliente_nuevo:
+                    resultado += "✓ Nuevo cliente registrado\n"
+                else:
+                    resultado += "ℹ️ Cliente existente\n"
+                if mensaje_cliente:
+                    resultado += f"   → {mensaje_cliente}\n"
 
                 # Guardar consumo usando primera línea de consumo/valor_kwh si existen
                 try:
