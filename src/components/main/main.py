@@ -4,6 +4,7 @@ from PyQt6.QtGui import QPixmap, QIcon
 from PyQt6.uic import loadUi
 from components.facturar.cargar_factura import CargarFacturaWidget
 from components.cuentas.cuentas import CuentasWidget
+from components.clientes.clientes import ClientesWidget
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -70,6 +71,10 @@ class MainWindow(QMainWindow):
         self.page_cuentas = CuentasWidget()
         self.stackedPages.addWidget(self.page_cuentas)
 
+        # Agregar página de clientes
+        self.page_clientes = ClientesWidget()
+        self.stackedPages.addWidget(self.page_clientes)
+
     def _on_menu_clicked(self):
         sender = self.sender()
         if isinstance(sender, QPushButton):
@@ -90,6 +95,7 @@ class MainWindow(QMainWindow):
         page_map = {
             'btn_cargar_factura': 1,  # Índice de la página de cargar factura
             'btn_cuentas': 2,         # Índice de la página de cuentas
+            'btn_clientes': 3,        # Índice de la página de clientes
         }
         
         button_name = button.objectName()
