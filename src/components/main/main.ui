@@ -200,19 +200,6 @@ color: white;</string>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="btn_gestionar_factura">
-         <property name="styleSheet">
-          <string notr="true">border-radius: 0;</string>
-         </property>
-         <property name="text">
-          <string>Gestionar factura</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item>
         <widget class="QPushButton" name="btn_usuarios">
          <property name="text">
           <string>Gestionar usuarios</string>

@@ -6,6 +6,7 @@ from components.facturar.cargar_factura import CargarFacturaWidget
 from components.cuentas.cuentas import CuentasWidget
 from components.clientes.clientes import ClientesWidget
 from components.usuarios.usuarios import UsuariosWidget
+from components.consumos.consumos import ConsumosWidget
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -33,7 +34,7 @@ class MainWindow(QMainWindow):
         self._menu_buttons = [
             getattr(self, name)
             for name in [
-                'btn_cargar_factura', 'btn_gestionar_factura', 'btn_usuarios',
+                'btn_cargar_factura', 'btn_usuarios',
                 'btn_cuentas', 'btn_clientes', 'btn_consumos',
                 'btn_ordenes_pago', 'btn_reportes', 'btn_alertas'
             ]
@@ -80,6 +81,10 @@ class MainWindow(QMainWindow):
         self.page_usuarios = UsuariosWidget()
         self.stackedPages.addWidget(self.page_usuarios)
 
+        # Agregar página de consumos
+        self.page_consumos = ConsumosWidget()
+        self.stackedPages.addWidget(self.page_consumos)
+
     def _on_menu_clicked(self):
         sender = self.sender()
         if isinstance(sender, QPushButton):
@@ -102,6 +107,7 @@ class MainWindow(QMainWindow):
             'btn_cuentas': 2,         # Índice de la página de cuentas
             'btn_clientes': 3,        # Índice de la página de clientes
             'btn_usuarios': 4,        # Índice de la página de usuarios
+            'btn_consumos': 5,        # Índice de la página de consumos
         }
         
         button_name = button.objectName()

@@ -635,3 +635,101 @@ def autenticar_usuario(nombre_usuario: str, contrasena_plana: str) -> tuple[bool
         db.close()
 
 
+# ===== Consumos: CRUD helpers =====
+def listar_consumos(cuenta: int | None = None, limite: int | None = None) -> list[Consumo]:
+    """Lista consumos, opcionalmente filtrados por cuenta.
+
+    Args:
+        cuenta: Número de cuenta para filtrar (None = todos)
+        limite: Límite de registros a retornar (None = todos)
+    """
+    db = SessionLocal()
+    try:
+        q = db.query(Consumo)
+        if cuenta is not None:
+            q = q.filter(Consumo.cuenta == cuenta)
+        q = q.order_by(Consumo.fecha_maxima_pago.desc())
+        if limite:
+            q = q.limit(limite)
+        return q.all()
+    finally:
+        db.close()
+
+
+def obtener_consumo_por_id(consumo_id: int) -> Consumo | None:
+    """Obtiene un consumo por su ID."""
+    db = SessionLocal()
+    try:
+        return db.query(Consumo).filter(Consumo.id == consumo_id).first()
+    finally:
+        db.close()
+
+
+def actualizar_consumo(
+    consumo_id: int,
+    consumo_kwh: int | None = None,
+    valor_kwh: float | None = None,
+    valor_kwh_subsidiado: float | None = None,
+    fecha_maxima_pago: str | None = None,
+    valor_total: float | None = None,
+    valor_total_pagar: float | None = None,
+    intereses_mora: float | None = None,
+    numero_orden: int | None = None
+) -> tuple[bool, str]:
+    """Actualiza campos de un consumo existente."""
+    from datetime import datetime
+    
+    db = SessionLocal()
+    try:
+        c = db.query(Consumo).filter(Consumo.id == consumo_id).first()
+        if not c:
+            return False, "Consumo no encontrado."
+        
+        if consumo_kwh is not None:
+            c.consumo_kwh = int(consumo_kwh)
+        if valor_kwh is not None:
+            c.valor_kwh = float(valor_kwh)
+        if valor_kwh_subsidiado is not None:
+            c.valor_kwh_subsidiado = float(valor_kwh_subsidiado)
+        if fecha_maxima_pago is not None:
+            try:
+                c.fecha_maxima_pago = datetime.strptime(fecha_maxima_pago, "%Y-%m-%d").date()
+            except Exception:
+                return False, "Formato de fecha inválido. Use YYYY-MM-DD."
+        if valor_total is not None:
+            c.valor_total = float(valor_total)
+        if valor_total_pagar is not None:
+            c.Valor_total_pagar = float(valor_total_pagar)
+        if intereses_mora is not None:
+            c.intereses_mora = float(intereses_mora)
+        if numero_orden is not None:
+            c.numero_orden = int(numero_orden)
+        
+        db.commit()
+        return True, "Consumo actualizado exitosamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al actualizar consumo: {e}"
+    finally:
+        db.close()
+
+
+def eliminar_consumo(consumo_id: int) -> tuple[bool, str]:
+    """Elimina un consumo por su ID."""
+    db = SessionLocal()
+    try:
+        c = db.query(Consumo).filter(Consumo.id == consumo_id).first()
+        if not c:
+            return False, "Consumo no encontrado."
+        
+        db.delete(c)
+        db.commit()
+        return True, "Consumo eliminado exitosamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al eliminar consumo: {e}"
+    finally:
+        db.close()
+
+
+
