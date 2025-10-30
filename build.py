@@ -1,3 +1,5 @@
+import sys
+sys.dont_write_bytecode = True
 import PyInstaller.__main__
 import os
 

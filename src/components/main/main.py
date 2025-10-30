@@ -2,6 +2,7 @@ import os, sys
 from PyQt6.QtWidgets import QMainWindow, QPushButton, QMessageBox
 from PyQt6.QtGui import QPixmap, QIcon
 from PyQt6.uic import loadUi
+from components.facturar.cargar_factura import CargarFacturaWidget
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -21,6 +22,10 @@ class MainWindow(QMainWindow):
         loadUi(ui_path, self)
         self.setWindowIcon(QIcon(icon_path))
         self.setWindowTitle("Ventana Principal")
+        
+        # Inicializar widgets de las páginas
+        self._init_pages()
+        
         # Preparar selección de botones del menú lateral
         self._menu_buttons = [
             getattr(self, name)
@@ -44,15 +49,47 @@ class MainWindow(QMainWindow):
         # Conectar botón de salir
         if hasattr(self, 'btn_salir'):
             self.btn_salir.clicked.connect(self._on_salir)
+    
+    def _init_pages(self):
+        """Inicializar las páginas del stackedWidget."""
+        if not hasattr(self, 'stackedPages'):
+            return
+        
+        # Limpiar páginas existentes (excepto la primera que es el home)
+        while self.stackedPages.count() > 1:
+            widget = self.stackedPages.widget(1)
+            self.stackedPages.removeWidget(widget)
+            widget.deleteLater()
+        
+        # Agregar página de cargar factura
+        self.page_cargar_factura = CargarFacturaWidget()
+        self.stackedPages.addWidget(self.page_cargar_factura)
 
     def _on_menu_clicked(self):
         sender = self.sender()
         if isinstance(sender, QPushButton):
             self._set_active_button(sender)
+            # Navegar a la página correspondiente
+            self._navigate_to_page(sender)
 
     def _set_active_button(self, active_btn: QPushButton):
         for btn in self._menu_buttons:
             btn.setChecked(btn is active_btn)
+    
+    def _navigate_to_page(self, button: QPushButton):
+        """Navegar a la página correspondiente según el botón presionado."""
+        if not hasattr(self, 'stackedPages'):
+            return
+        
+        # Mapeo de botones a índices de páginas
+        page_map = {
+            'btn_cargar_factura': 1,  # Índice de la página de cargar factura
+        }
+        
+        button_name = button.objectName()
+        page_index = page_map.get(button_name, 0)  # 0 es la página home por defecto
+        
+        self.stackedPages.setCurrentIndex(page_index)
 
     def set_user(self, nombre: str | None, avatar_path: str | None = None):
         """Mostrar el nombre de usuario y avatar en el encabezado del menú."""

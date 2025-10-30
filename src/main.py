@@ -1,10 +1,9 @@
 import sys
+sys.dont_write_bytecode = True
 from PyQt6.QtWidgets import QApplication, QDialog
 from config.database import initialize_database
 from components.usuario.login import LoginWindow
 from components.main.main import MainWindow
-
-sys.dont_write_bytecode = True
 
 if __name__ == "__main__":
     initialize_database()
