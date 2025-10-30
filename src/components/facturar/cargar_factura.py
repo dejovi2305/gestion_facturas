@@ -17,6 +17,7 @@ from .factura_helperV2 import (
     extraer_valor_total_pagar,
     extraer_fecha_maxima_pago,
 )
+from .consumo_dialog import ConsumoDialog
 from config.database import guardar_cuenta_si_no_existe
 from config.database import guardar_cliente_si_no_existe
 from config.database import guardar_consumo
@@ -319,15 +320,15 @@ class CargarFacturaWidget(QWidget):
                         except Exception:
                             mensaje_cliente = "No se pudo registrar/actualizar el cliente"
                         
-                        resultado = "===== DATOS EXTRAÍDOS =====\n\n"
+                        resultado = "===== DATOS EXTRAÍDOS (PDF) =====\n\n"
                         resultado += f"📄 Número de Cuenta: {numero_cuenta}\n\n"
-                        if nombre_cliente:
+                        if nombre_cliente and not (cuenta_existe and cliente_existe):
                             resultado += f"👤 Nombre del Cliente: {nombre_cliente}\n\n"
-                        if direccion:
+                        if direccion and not (cuenta_existe and cliente_existe):
                             resultado += f"📍 Dirección: {direccion}\n\n"
-                        if estrato:
+                        if estrato and not (cuenta_existe and cliente_existe):
                             resultado += f"🏢 Estrato: {estrato}\n\n"
-                        if numero_medidor:
+                        if numero_medidor and not (cuenta_existe and cliente_existe):
                             resultado += f"📄 Número de Medidor: {numero_medidor}\n\n"
                         resultado += f"⚡ Consumo kWh: {consumo_kwh if consumo_kwh is not None else 'No disponible'}\n\n"
                         resultado += f"💰 Valor kWh: ${valor_kwh if valor_kwh is not None else 'No disponible'}\n\n"
@@ -350,6 +351,41 @@ class CargarFacturaWidget(QWidget):
                         if 'mensaje_cliente' in locals() and mensaje_cliente:
                             resultado += f"   → {mensaje_cliente}\n"
                         
+                        # Antes de guardar consumo, permitir edición en diálogo
+                        try:
+                            dlg = ConsumoDialog(
+                                self,
+                                consumo_kwh=consumo_kwh or 0,
+                                valor_kwh=valor_kwh or 0.0,
+                                valor_kwh_subsidiado=None,
+                                fecha_maxima_pago=None,
+                                valor_total=valor_total or 0.0,
+                                valor_total_pagar=None,
+                                intereses_mora=None,
+                                numero_orden=None,
+                            )
+                            if dlg.exec():
+                                vals = dlg.values()
+                                creado_consumo, msg_consumo, id_consumo = guardar_consumo(
+                                    numero_cuenta=numero_cuenta_int,
+                                    consumo_kwh=vals["consumo_kwh"],
+                                    valor_kwh=vals["valor_kwh"],
+                                    valor_kwh_subsidiado=vals["valor_kwh_subsidiado"],
+                                    fecha_maxima_pago=vals["fecha_maxima_pago"],
+                                    valor_total=vals["valor_total"],
+                                    valor_total_pagar=vals["valor_total_pagar"],
+                                    intereses_mora=vals["intereses_mora"],
+                                    numero_orden=vals["numero_orden"],
+                                )
+                                if creado_consumo:
+                                    resultado += f"✓ Consumo registrado (id={id_consumo})\n"
+                                else:
+                                    resultado += f"⚠️ No se registró consumo: {msg_consumo}\n"
+                            else:
+                                resultado += "⏸ Registro de consumo cancelado por el usuario\n"
+                        except Exception as e:
+                            resultado += f"⚠️ Error registrando consumo: {e}\n"
+
                         self.txt_resultado.setPlainText(resultado)
                     else:
                         self.txt_resultado.setPlainText(
@@ -535,30 +571,41 @@ class CargarFacturaWidget(QWidget):
                 if mensaje_cliente:
                     resultado += f"   → {mensaje_cliente}\n"
 
-                # Guardar consumo usando primera línea de consumo/valor_kwh si existen
+                # Diálogo para revisar/editar CONSUMO antes de guardar
                 try:
-                    consumo_val = None
-                    if consumo_kwh_lista and len(consumo_kwh_lista) > 0:
-                        consumo_val = consumo_kwh_lista[0]
-                    valor_kwh_val = None
-                    if valor_kwh_lista and len(valor_kwh_lista) > 0:
-                        valor_kwh_val = valor_kwh_lista[0]
+                    consumo_val = consumo_kwh_lista[0] if (consumo_kwh_lista and len(consumo_kwh_lista) > 0) else 0
+                    valor_kwh_val = valor_kwh_lista[0] if (valor_kwh_lista and len(valor_kwh_lista) > 0) else 0.0
 
-                    creado_consumo, msg_consumo, id_consumo = guardar_consumo(
-                        numero_cuenta=numero_cuenta_int,
+                    dlg = ConsumoDialog(
+                        self,
                         consumo_kwh=consumo_val,
                         valor_kwh=valor_kwh_val,
-                        valor_kwh_subsidiado=None,  # aún no extraído
+                        valor_kwh_subsidiado=None,
                         fecha_maxima_pago=fecha_maxima_pago if fecha_maxima_pago else None,
                         valor_total=valor_total_xml if 'valor_total_xml' in locals() else None,
                         valor_total_pagar=valor_total_pagar_xml if 'valor_total_pagar_xml' in locals() else None,
                         intereses_mora=None,
                         numero_orden=None,
                     )
-                    if creado_consumo:
-                        resultado += f"✓ Consumo registrado (id={id_consumo})\n"
+                    if dlg.exec():
+                        vals = dlg.values()
+                        creado_consumo, msg_consumo, id_consumo = guardar_consumo(
+                            numero_cuenta=numero_cuenta_int,
+                            consumo_kwh=vals["consumo_kwh"],
+                            valor_kwh=vals["valor_kwh"],
+                            valor_kwh_subsidiado=vals["valor_kwh_subsidiado"],
+                            fecha_maxima_pago=vals["fecha_maxima_pago"],
+                            valor_total=vals["valor_total"],
+                            valor_total_pagar=vals["valor_total_pagar"],
+                            intereses_mora=vals["intereses_mora"],
+                            numero_orden=vals["numero_orden"],
+                        )
+                        if creado_consumo:
+                            resultado += f"✓ Consumo registrado (id={id_consumo})\n"
+                        else:
+                            resultado += f"⚠️ No se registró consumo: {msg_consumo}\n"
                     else:
-                        resultado += f"⚠️ No se registró consumo: {msg_consumo}\n"
+                        resultado += "⏸ Registro de consumo cancelado por el usuario\n"
                 except Exception as e:
                     resultado += f"⚠️ Error registrando consumo: {e}\n"
 
