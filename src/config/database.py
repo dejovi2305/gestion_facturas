@@ -6,6 +6,7 @@ from models.usuario import Usuario
 from models.cuenta import Cuenta
 from models.cliente import Cliente
 from models.consumo import Consumo
+from models.orden_pago import OrdenPago
 from config.security import encriptar_contrasena, codificar_para_almacenamiento
 
 # Crear el engine de SQLAlchemy
@@ -730,6 +731,161 @@ def eliminar_consumo(consumo_id: int) -> tuple[bool, str]:
         return False, f"Error al eliminar consumo: {e}"
     finally:
         db.close()
+
+
+# ===== Órdenes de Pago: CRUD helpers =====
+
+def listar_ordenes_pago(limite: int = None):
+    """
+    Lista todas las órdenes de pago.
+    
+    Args:
+        limite: Número máximo de registros a retornar (opcional)
+    
+    Returns:
+        Lista de objetos OrdenPago ordenados por fecha descendente
+    """
+    db = SessionLocal()
+    try:
+        query = db.query(OrdenPago).order_by(OrdenPago.fecha.desc())
+        
+        if limite:
+            query = query.limit(limite)
+        
+        return query.all()
+    finally:
+        db.close()
+
+
+def obtener_orden_pago_por_id(orden_id: int):
+    """Obtiene una orden de pago por su ID."""
+    db = SessionLocal()
+    try:
+        return db.query(OrdenPago).filter(OrdenPago.id == orden_id).first()
+    finally:
+        db.close()
+
+
+def crear_orden_pago(
+    numero_orden: int,
+    fecha,
+    valor: float
+) -> tuple[bool, str]:
+    """
+    Crea una nueva orden de pago.
+    
+    Args:
+        numero_orden: Número único de la orden
+        fecha: Fecha de la orden (string YYYY-MM-DD o objeto date)
+        valor: Valor total de la orden
+    
+    Returns:
+        tuple[bool, str]: (éxito, mensaje)
+    """
+    db = SessionLocal()
+    try:
+        # Verificar que el número de orden no exista
+        orden_existente = db.query(OrdenPago).filter(OrdenPago.numero_orden == numero_orden).first()
+        if orden_existente:
+            return False, f"El número de orden {numero_orden} ya existe."
+        
+        # Convertir fecha string a objeto date si es necesario
+        if isinstance(fecha, str):
+            from datetime import datetime
+            fecha_obj = datetime.strptime(fecha, "%Y-%m-%d").date()
+        else:
+            fecha_obj = fecha
+        
+        # Crear nueva orden
+        nueva_orden = OrdenPago(
+            numero_orden=numero_orden,
+            fecha=fecha_obj,
+            valor=valor
+        )
+        
+        db.add(nueva_orden)
+        db.commit()
+        return True, "Orden de pago creada exitosamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al crear orden de pago: {e}"
+    finally:
+        db.close()
+
+
+def actualizar_orden_pago(
+    orden_id: int,
+    numero_orden: int = None,
+    fecha = None,
+    valor: float = None
+) -> tuple[bool, str]:
+    """
+    Actualiza una orden de pago existente.
+    Solo actualiza los campos proporcionados (no None).
+    
+    Args:
+        fecha: Fecha (string YYYY-MM-DD o objeto date)
+    
+    Returns:
+        tuple[bool, str]: (éxito, mensaje)
+    """
+    db = SessionLocal()
+    try:
+        orden = db.query(OrdenPago).filter(OrdenPago.id == orden_id).first()
+        if not orden:
+            return False, "Orden de pago no encontrada."
+        
+        # Actualizar solo campos proporcionados
+        if numero_orden is not None:
+            # Verificar que el nuevo número no exista en otra orden
+            orden_existente = db.query(OrdenPago).filter(
+                OrdenPago.numero_orden == numero_orden,
+                OrdenPago.id != orden_id
+            ).first()
+            if orden_existente:
+                return False, f"El número de orden {numero_orden} ya existe en otra orden."
+            orden.numero_orden = int(numero_orden)
+        
+        if fecha is not None:
+            # Convertir fecha string a objeto date si es necesario
+            if isinstance(fecha, str):
+                from datetime import datetime
+                fecha_obj = datetime.strptime(fecha, "%Y-%m-%d").date()
+            else:
+                fecha_obj = fecha
+            orden.fecha = fecha_obj
+        
+        if valor is not None:
+            orden.valor = float(valor)
+        
+        db.commit()
+        return True, "Orden de pago actualizada exitosamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al actualizar orden de pago: {e}"
+    finally:
+        db.close()
+
+
+def eliminar_orden_pago(orden_id: int) -> tuple[bool, str]:
+    """Elimina una orden de pago por su ID."""
+    db = SessionLocal()
+    try:
+        orden = db.query(OrdenPago).filter(OrdenPago.id == orden_id).first()
+        if not orden:
+            return False, "Orden de pago no encontrada."
+        
+        db.delete(orden)
+        db.commit()
+        return True, "Orden de pago eliminada exitosamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al eliminar orden de pago: {e}"
+    finally:
+        db.close()
+
+
+
 
 
 

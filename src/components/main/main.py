@@ -7,6 +7,7 @@ from components.cuentas.cuentas import CuentasWidget
 from components.clientes.clientes import ClientesWidget
 from components.usuarios.usuarios import UsuariosWidget
 from components.consumos.consumos import ConsumosWidget
+from components.ordenes_pago.ordenes_pago import OrdenesPagoWidget
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -85,6 +86,10 @@ class MainWindow(QMainWindow):
         self.page_consumos = ConsumosWidget()
         self.stackedPages.addWidget(self.page_consumos)
 
+        # Agregar página de órdenes de pago
+        self.page_ordenes_pago = OrdenesPagoWidget()
+        self.stackedPages.addWidget(self.page_ordenes_pago)
+
     def _on_menu_clicked(self):
         sender = self.sender()
         if isinstance(sender, QPushButton):
@@ -108,6 +113,7 @@ class MainWindow(QMainWindow):
             'btn_clientes': 3,        # Índice de la página de clientes
             'btn_usuarios': 4,        # Índice de la página de usuarios
             'btn_consumos': 5,        # Índice de la página de consumos
+            'btn_ordenes_pago': 6,    # Índice de la página de órdenes de pago
         }
         
         button_name = button.objectName()
