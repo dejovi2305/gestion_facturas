@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QDateEdit,
     QVBoxLayout,
-    QLabel,
+    QLineEdit,
 )
 from PyQt6.QtCore import QDate
 
@@ -30,7 +30,8 @@ class ConsumoDialog(QDialog):
         self,
         parent=None,
         *,
-        consumo_kwh: int | float | None = None,
+    cufe: str | None = None,
+    consumo_kwh: int | float | None = None,
         valor_kwh: float | None = None,
         valor_kwh_subsidiado: float | None = None,
         fecha_maxima_pago: str | None = None,  # YYYY-MM-DD
@@ -44,6 +45,13 @@ class ConsumoDialog(QDialog):
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
+
+        # CUFE/UUID
+        self.txt_cufe = QLineEdit(self)
+        self.txt_cufe.setMaxLength(128)
+        if cufe:
+            self.txt_cufe.setText(str(cufe))
+        form.addRow("CUFE / UUID", self.txt_cufe)
 
         # Consumo kWh
         self.sp_consumo = QSpinBox(self)
@@ -149,6 +157,7 @@ class ConsumoDialog(QDialog):
         qd = self.dt_fecha.date()
         fecha = f"{qd.year():04d}-{qd.month():02d}-{qd.day():02d}"
         return {
+            "cufe": self.txt_cufe.text().strip(),
             "consumo_kwh": int(self.sp_consumo.value()),
             "valor_kwh": float(self.sp_valor_kwh.value()),
             "valor_kwh_subsidiado": float(self.sp_valor_kwh_sub.value()),

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Numeric, Date, ForeignKey
+from sqlalchemy import Column, Integer, Numeric, Date, ForeignKey, String
 from sqlalchemy.orm import relationship
 from . import Base
 
@@ -17,6 +17,7 @@ class Consumo(Base):
     cuenta = Column(Integer, ForeignKey("Cuenta.numero_cuenta"), nullable=False, index=True)
 
     # Campos de consumo
+    cufe = Column(String, nullable=False, unique=True, index=True)
     consumo_kwh = Column(Integer, nullable=False, default=0)
     valor_kwh = Column(Numeric(18, 6), nullable=False, default=0)
     valor_kwh_subsidiado = Column(Numeric(18, 6), nullable=False, default=0)
@@ -35,6 +36,6 @@ class Consumo(Base):
 
     def __repr__(self) -> str:
         return (
-            f"<Consumo(id={self.id}, cuenta={self.cuenta}, consumo_kwh={self.consumo_kwh}, "
+            f"<Consumo(id={self.id}, cuenta={self.cuenta}, cufe={self.cufe}, consumo_kwh={self.consumo_kwh}, "
             f"valor_kwh={self.valor_kwh}, valor_total={self.valor_total}, total_pagar={self.Valor_total_pagar})>"
         )

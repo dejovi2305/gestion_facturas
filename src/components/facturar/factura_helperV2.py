@@ -536,6 +536,26 @@ def extraer_valor_total_pagar(ruta_archivo: str) -> Tuple[Optional[float], List[
         return None, detalles
 
 
+def extraer_cufe(ruta_archivo: str) -> Tuple[Optional[str], List[Tuple[str, str]]]:
+    """
+    Extrae el CUFE/CUDE (UUID) de la factura.
+    Busca principalmente cbc:UUID con schemeName "CUFE-SHA384" o "CUDE-SHA384".
+    """
+    targets = [
+        {"tag": "UUID", "atributos": {"schemeName": "CUFE-SHA384"}},
+        {"tag": "UUID", "atributos": {"schemeName": "CUDE-SHA384"}},
+        {"tag": "UUID"},  # Fallback amplio; se validará por regex
+    ]
+    # CUFE/CUDE hexadecimal largo (usualmente 96 chars). Permitimos 64-128 por variaciones.
+    return extraer_valor_xml(
+        ruta_archivo=ruta_archivo,
+        targets=targets,
+        validar=lambda s: bool(re.fullmatch(r"[0-9a-fA-F]{64,128}", s.strip()) if s else False),
+        incluir_embebidos=True,
+        fallback_regex=r"[0-9a-fA-F]{64,128}",
+    )
+
+
 def _coincide_target(tag: str, ruta: str, elem: ET.Element, target: Dict[str, Any]) -> bool:
     """Evalúa si un elemento coincide con un target de búsqueda."""
     if target.get("tag") and tag != target["tag"]:

@@ -1,6 +1,5 @@
 import os
 import sys
-import re
 from PyQt6.QtWidgets import QWidget, QFileDialog, QMessageBox
 from PyQt6.uic import loadUi
 import pdfplumber
@@ -16,6 +15,7 @@ from .factura_helperV2 import (
     extraer_valor_total,
     extraer_valor_total_pagar,
     extraer_fecha_maxima_pago,
+    extraer_cufe,
 )
 from .consumo_dialog import ConsumoDialog
 from config.database import guardar_cuenta_si_no_existe
@@ -355,6 +355,7 @@ class CargarFacturaWidget(QWidget):
                         try:
                             dlg = ConsumoDialog(
                                 self,
+                                cufe=None,  # En PDF normalmente no tenemos CUFE; permitir que el usuario lo ingrese
                                 consumo_kwh=consumo_kwh or 0,
                                 valor_kwh=valor_kwh or 0.0,
                                 valor_kwh_subsidiado=None,
@@ -366,8 +367,14 @@ class CargarFacturaWidget(QWidget):
                             )
                             if dlg.exec():
                                 vals = dlg.values()
+                                if not vals.get("cufe"):
+                                    resultado += "⚠️ CUFE requerido para guardar consumo. Operación cancelada.\n"
+                                    self.txt_resultado.setPlainText(resultado)
+                                    self.progress_bar.setValue(100)
+                                    return
                                 creado_consumo, msg_consumo, id_consumo = guardar_consumo(
                                     numero_cuenta=numero_cuenta_int,
+                                    cufe=vals["cufe"],
                                     consumo_kwh=vals["consumo_kwh"],
                                     valor_kwh=vals["valor_kwh"],
                                     valor_kwh_subsidiado=vals["valor_kwh_subsidiado"],
@@ -474,6 +481,7 @@ class CargarFacturaWidget(QWidget):
             fecha_maxima_pago, detalles_fecha = extraer_fecha_maxima_pago(self.ruta_archivo)
             valor_total_xml, detalles_total = extraer_valor_total(self.ruta_archivo)
             valor_total_pagar_xml, detalles_total_pagar = extraer_valor_total_pagar(self.ruta_archivo)
+            cufe_xml, detalles_cufe = extraer_cufe(self.ruta_archivo)
 
             self.progress_bar.setValue(70)
 
@@ -510,6 +518,8 @@ class CargarFacturaWidget(QWidget):
                     resultado += f"💵 Valor Total (LineExtensionAmount): ${valor_total_xml:,.2f} COP\n"
                 if valor_total_pagar_xml is not None:
                     resultado += f"🧾 Valor Total a Pagar (PayableAmount): ${valor_total_pagar_xml:,.2f} COP\n\n"
+                if cufe_xml:
+                    resultado += f"🔑 CUFE/CUDE: {cufe_xml}\n\n"
                 
                 resultado += "Detalles de hallazgos (valor, ruta):\n"
                 for val, ruta in detalles:
@@ -554,6 +564,10 @@ class CargarFacturaWidget(QWidget):
                     resultado += "\nDetalles de hallazgos de valor total a pagar (PayableAmount):\n"
                     for val, ruta in detalles_total_pagar:
                         resultado += f"  - {val} @ {ruta}\n"
+                if detalles_cufe:
+                    resultado += "\nDetalles de hallazgos de CUFE/CUDE (valor, ruta):\n"
+                    for val, ruta in detalles_cufe:
+                        resultado += f"  - {val} @ {ruta}\n"
 
                 # Reportar estado de cuenta/cliente según caso
                 resultado += "\n"
@@ -578,6 +592,7 @@ class CargarFacturaWidget(QWidget):
 
                     dlg = ConsumoDialog(
                         self,
+                        cufe=cufe_xml,
                         consumo_kwh=consumo_val,
                         valor_kwh=valor_kwh_val,
                         valor_kwh_subsidiado=None,
@@ -591,6 +606,7 @@ class CargarFacturaWidget(QWidget):
                         vals = dlg.values()
                         creado_consumo, msg_consumo, id_consumo = guardar_consumo(
                             numero_cuenta=numero_cuenta_int,
+                            cufe=vals["cufe"],
                             consumo_kwh=vals["consumo_kwh"],
                             valor_kwh=vals["valor_kwh"],
                             valor_kwh_subsidiado=vals["valor_kwh_subsidiado"],

@@ -145,6 +145,7 @@ def guardar_cliente_si_no_existe(
 
 def guardar_consumo(
     numero_cuenta: int,
+    cufe: str | None,
     consumo_kwh: float | int | None = None,
     valor_kwh: float | None = None,
     valor_kwh_subsidiado: float | None = None,
@@ -175,6 +176,17 @@ def guardar_consumo(
             db.commit()
             db.refresh(cuenta)
 
+        # Validar CUFE obligatorio
+        if not cufe or not str(cufe).strip():
+            return False, "El CUFE/UUID es requerido para registrar el consumo.", None
+
+        cufe = str(cufe).strip()
+
+        # Verificar existencia previa por CUFE
+        existente = db.query(Consumo).filter(Consumo.cufe == cufe).first()
+        if existente:
+            return False, f"Ya existe un consumo con CUFE {cufe} (id={existente.id}).", existente.id
+
         # Normalizar valores
         def to_int(v, default=0):
             try:
@@ -198,6 +210,7 @@ def guardar_consumo(
 
         consumo = Consumo(
             cuenta=numero_cuenta,
+            cufe=cufe,
             consumo_kwh=to_int(consumo_kwh, 0),
             valor_kwh=to_float(valor_kwh, 0.0),
             valor_kwh_subsidiado=to_float(valor_kwh_subsidiado, 0.0),
