@@ -6,6 +6,7 @@ from models.usuario import Usuario
 from models.cuenta import Cuenta
 from models.cliente import Cliente
 from models.consumo import Consumo
+from config.security import encriptar_contrasena, codificar_para_almacenamiento
 
 # Crear el engine de SQLAlchemy
 DATABASE_URL = "sqlite:///app.db"
@@ -15,16 +16,20 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def initialize_database():
-    """Inicializa la base de datos y crea usuario admin por defecto."""
+    """Inicializa la base de datos y crea usuario admin por defecto con contraseña encriptada."""
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         admin_user = db.query(Usuario).filter(Usuario.nombre_usuario == "admin").first()
         if not admin_user:
+            # Encriptar contraseña del admin
+            hash_pwd, salt = encriptar_contrasena("admin123")
+            contrasena_encriptada = codificar_para_almacenamiento(hash_pwd, salt)
+            
             admin_user = Usuario(
                 nombre_usuario="admin",
                 correo="admin@sistema.com",
-                contrasenna="admin123",
+                contrasenna=contrasena_encriptada,
                 fecha_registro=datetime.now(),
                 activo=True
             )
@@ -233,6 +238,134 @@ def guardar_cliente_si_no_existe(
         db.close()
 
 
+# ===== Clientes: CRUD helpers =====
+def listar_clientes(activo: bool | None = True) -> list[Cliente]:
+    """Lista clientes por estado.
+
+    activo=True -> solo activos; False -> solo inactivos; None -> todos.
+    """
+    db = SessionLocal()
+    try:
+        q = db.query(Cliente)
+        if activo is True:
+            q = q.filter(Cliente.activo.is_(True))
+        elif activo is False:
+            q = q.filter(Cliente.activo.is_(False))
+        return q.order_by(Cliente.cuenta.asc()).all()
+    finally:
+        db.close()
+
+
+def crear_cliente(
+    numero_cuenta: int,
+    nombre: str | None = None,
+    direccion: str | None = None,
+    estrato: str | None = None,
+    numero_medidor: str | None = None,
+    activo: bool = True
+) -> tuple[bool, str, int | None]:
+    """Crea un cliente nuevo, validando que exista la cuenta y unicidad."""
+    db = SessionLocal()
+    try:
+        # Verificar que la cuenta exista
+        cuenta = db.query(Cuenta).filter(Cuenta.numero_cuenta == numero_cuenta).first()
+        if not cuenta:
+            return False, f"No existe la cuenta {numero_cuenta}. Créela primero.", None
+        
+        # Validar unicidad (un cliente por cuenta)
+        existente = db.query(Cliente).filter(Cliente.cuenta == numero_cuenta).first()
+        if existente:
+            return False, f"Ya existe un cliente para la cuenta {numero_cuenta}.", existente.id
+        
+        c = Cliente(
+            cuenta=numero_cuenta,
+            nombre=nombre,
+            direccion=direccion,
+            estrato=estrato,
+            numero_medidor=numero_medidor,
+            activo=bool(activo)
+        )
+        db.add(c)
+        db.commit()
+        db.refresh(c)
+        return True, f"Cliente creado para cuenta {numero_cuenta}.", c.id
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al crear cliente: {e}", None
+    finally:
+        db.close()
+
+
+def actualizar_cliente(
+    cliente_id: int,
+    numero_cuenta: int | None = None,
+    nombre: str | None = None,
+    direccion: str | None = None,
+    estrato: str | None = None,
+    numero_medidor: str | None = None,
+    activo: bool | None = None
+) -> tuple[bool, str]:
+    """Actualiza un cliente existente."""
+    db = SessionLocal()
+    try:
+        c = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+        if not c:
+            return False, "Cliente no encontrado."
+        
+        if numero_cuenta is not None and numero_cuenta != c.cuenta:
+            # Validar que la nueva cuenta exista
+            cuenta = db.query(Cuenta).filter(Cuenta.numero_cuenta == numero_cuenta).first()
+            if not cuenta:
+                return False, f"No existe la cuenta {numero_cuenta}."
+            # Validar unicidad
+            dup = db.query(Cliente).filter(Cliente.cuenta == numero_cuenta).first()
+            if dup:
+                return False, f"Ya existe un cliente para la cuenta {numero_cuenta}."
+            c.cuenta = numero_cuenta
+        
+        if nombre is not None:
+            c.nombre = nombre
+        if direccion is not None:
+            c.direccion = direccion
+        if estrato is not None:
+            c.estrato = estrato
+        if numero_medidor is not None:
+            c.numero_medidor = numero_medidor
+        if activo is not None:
+            c.activo = bool(activo)
+        
+        db.commit()
+        return True, "Cliente actualizado."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al actualizar cliente: {e}"
+    finally:
+        db.close()
+
+
+def eliminar_cliente(cliente_id: int) -> tuple[bool, str]:
+    """Elimina un cliente si no tiene consumos referenciados."""
+    db = SessionLocal()
+    try:
+        c = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+        if not c:
+            return False, "Cliente no encontrado."
+        
+        # Bloquear si hay consumos
+        tiene_consumo = db.query(Consumo).filter(Consumo.cuenta == c.cuenta).first() is not None
+        if tiene_consumo:
+            return False, "No se puede eliminar el cliente: existen consumos relacionados."
+        
+        db.delete(c)
+        db.commit()
+        return True, "Cliente eliminado."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al eliminar cliente: {e}"
+    finally:
+        db.close()
+
+
 def guardar_consumo(
     numero_cuenta: int,
     cufe: str | None,
@@ -318,6 +451,186 @@ def guardar_consumo(
     except Exception as e:
         db.rollback()
         return False, f"Error al guardar el consumo: {e}", None
+    finally:
+        db.close()
+
+
+# ===== Usuarios: CRUD helpers con seguridad =====
+def listar_usuarios(activo: bool | None = True) -> list[Usuario]:
+    """Lista usuarios por estado.
+
+    activo=True -> solo activos; False -> solo inactivos; None -> todos.
+    """
+    db = SessionLocal()
+    try:
+        q = db.query(Usuario)
+        if activo is True:
+            q = q.filter(Usuario.activo.is_(True))
+        elif activo is False:
+            q = q.filter(Usuario.activo.is_(False))
+        return q.order_by(Usuario.nombre_usuario.asc()).all()
+    finally:
+        db.close()
+
+
+def crear_usuario(
+    nombre_usuario: str,
+    correo: str,
+    contrasena_plana: str,
+    activo: bool = True
+) -> tuple[bool, str, int | None]:
+    """Crea un usuario nuevo con contraseña encriptada."""
+    db = SessionLocal()
+    try:
+        # Validar unicidad del nombre de usuario
+        existente = db.query(Usuario).filter(Usuario.nombre_usuario == nombre_usuario).first()
+        if existente:
+            return False, f"Ya existe el usuario '{nombre_usuario}'.", existente.id
+        
+        # Validaciones básicas
+        if not nombre_usuario or not nombre_usuario.strip():
+            return False, "El nombre de usuario no puede estar vacío.", None
+        if not contrasena_plana or len(contrasena_plana) < 4:
+            return False, "La contraseña debe tener al menos 4 caracteres.", None
+        if not correo or '@' not in correo:
+            return False, "Ingrese un correo electrónico válido.", None
+        
+        # Encriptar contraseña
+        hash_pwd, salt = encriptar_contrasena(contrasena_plana)
+        contrasena_encriptada = codificar_para_almacenamiento(hash_pwd, salt)
+        
+        u = Usuario(
+            nombre_usuario=nombre_usuario.strip(),
+            correo=correo.strip(),
+            contrasenna=contrasena_encriptada,
+            fecha_registro=datetime.now(),
+            activo=bool(activo)
+        )
+        db.add(u)
+        db.commit()
+        db.refresh(u)
+        return True, f"Usuario '{nombre_usuario}' creado exitosamente.", u.id
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al crear usuario: {e}", None
+    finally:
+        db.close()
+
+
+def actualizar_usuario(
+    usuario_id: int,
+    nombre_usuario: str | None = None,
+    correo: str | None = None,
+    contrasena_plana: str | None = None,
+    activo: bool | None = None
+) -> tuple[bool, str]:
+    """Actualiza un usuario existente. Si se proporciona contraseña, se encripta."""
+    db = SessionLocal()
+    try:
+        u = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+        if not u:
+            return False, "Usuario no encontrado."
+        
+        # Actualizar nombre de usuario si se proporciona
+        if nombre_usuario is not None and nombre_usuario.strip():
+            nombre_usuario = nombre_usuario.strip()
+            if nombre_usuario != u.nombre_usuario:
+                # Validar unicidad
+                dup = db.query(Usuario).filter(Usuario.nombre_usuario == nombre_usuario).first()
+                if dup:
+                    return False, f"Ya existe el usuario '{nombre_usuario}'."
+                u.nombre_usuario = nombre_usuario
+        
+        # Actualizar correo
+        if correo is not None and correo.strip():
+            if '@' not in correo:
+                return False, "Ingrese un correo electrónico válido."
+            u.correo = correo.strip()
+        
+        # Actualizar contraseña si se proporciona
+        if contrasena_plana is not None and contrasena_plana.strip():
+            if len(contrasena_plana) < 4:
+                return False, "La contraseña debe tener al menos 4 caracteres."
+            hash_pwd, salt = encriptar_contrasena(contrasena_plana)
+            contrasena_encriptada = codificar_para_almacenamiento(hash_pwd, salt)
+            u.contrasenna = contrasena_encriptada
+        
+        # Actualizar estado
+        if activo is not None:
+            u.activo = bool(activo)
+        
+        db.commit()
+        return True, "Usuario actualizado exitosamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al actualizar usuario: {e}"
+    finally:
+        db.close()
+
+
+def eliminar_usuario(usuario_id: int) -> tuple[bool, str]:
+    """Elimina un usuario (solo si no es el admin principal)."""
+    db = SessionLocal()
+    try:
+        u = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+        if not u:
+            return False, "Usuario no encontrado."
+        
+        # Proteger usuario admin
+        if u.nombre_usuario.lower() == "admin":
+            return False, "No se puede eliminar el usuario administrador principal."
+        
+        db.delete(u)
+        db.commit()
+        return True, f"Usuario '{u.nombre_usuario}' eliminado exitosamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al eliminar usuario: {e}"
+    finally:
+        db.close()
+
+
+def autenticar_usuario(nombre_usuario: str, contrasena_plana: str) -> tuple[bool, str, Usuario | None]:
+    """
+    Autentica un usuario verificando su contraseña encriptada.
+    
+    Returns:
+        Tupla (autenticado, mensaje, usuario_obj)
+    """
+    from config.security import verificar_contrasena, decodificar_de_almacenamiento, es_contrasena_encriptada
+    
+    db = SessionLocal()
+    try:
+        u = db.query(Usuario).filter(Usuario.nombre_usuario == nombre_usuario).first()
+        
+        if not u:
+            return False, "Usuario no encontrado.", None
+        
+        if not u.activo:
+            return False, "Usuario inactivo. Contacte al administrador.", None
+        
+        # Verificar si la contraseña almacenada está encriptada
+        if es_contrasena_encriptada(u.contrasenna):
+            # Contraseña encriptada: verificar con hash
+            try:
+                salt, hash_almacenado = decodificar_de_almacenamiento(u.contrasenna)
+                if verificar_contrasena(contrasena_plana, hash_almacenado, salt):
+                    return True, "Autenticación exitosa.", u
+                else:
+                    return False, "Contraseña incorrecta.", None
+            except Exception:
+                return False, "Error al verificar contraseña.", None
+        else:
+            # Contraseña en texto plano (BD antigua): comparar directamente
+            # y actualizar a formato encriptado
+            if u.contrasenna == contrasena_plana:
+                # Migrar contraseña a formato encriptado
+                hash_pwd, salt = encriptar_contrasena(contrasena_plana)
+                u.contrasenna = codificar_para_almacenamiento(hash_pwd, salt)
+                db.commit()
+                return True, "Autenticación exitosa (contraseña migrada).", u
+            else:
+                return False, "Contraseña incorrecta.", None
     finally:
         db.close()
 

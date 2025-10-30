@@ -1,24 +1,7 @@
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QDialog, QMessageBox, QLineEdit
 from PyQt6.uic import loadUi
-from sqlalchemy.orm import sessionmaker
-from config.database import SessionLocal
-from models.usuario import Usuario
-
-def validate_user(nombre_usuario: str, contrasenna: str) -> bool:
-    db = SessionLocal()
-    try:
-        user = db.query(Usuario).filter(
-            Usuario.nombre_usuario == nombre_usuario,
-            Usuario.contrasenna == contrasenna,
-            Usuario.activo == True
-        ).first()
-        return user is not None
-    except Exception as e:
-        print(f"Error validating user: {e}")
-        return False
-    finally:
-        db.close()
+from config.database import autenticar_usuario
 
 class LoginWindow(QDialog):
     def __init__(self):
@@ -47,16 +30,19 @@ class LoginWindow(QDialog):
         self.lineEdit_password.setEchoMode(QLineEdit.EchoMode.Password)
 
     def attempt_login(self):
-        nombre_usuario = self.lineEdit_username.text()
+        nombre_usuario = self.lineEdit_username.text().strip()
         contrasenna = self.lineEdit_password.text()
 
         if not nombre_usuario or not contrasenna:
             QMessageBox.warning(self, "Error", "Todos los campos son requeridos")
             return
 
-        if validate_user(nombre_usuario, contrasenna):
+        # Usar la nueva función de autenticación con contraseñas encriptadas
+        autenticado, mensaje, usuario_obj = autenticar_usuario(nombre_usuario, contrasenna)
+        
+        if autenticado:
             # Guardar el nombre de usuario para usarlo en la ventana principal
             self.logged_username = nombre_usuario
             self.accept()
         else:
-            QMessageBox.critical(self, "Error", "Usuario ó Contraseña incorrectos")
+            QMessageBox.critical(self, "Error de autenticación", mensaje)

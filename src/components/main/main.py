@@ -5,6 +5,7 @@ from PyQt6.uic import loadUi
 from components.facturar.cargar_factura import CargarFacturaWidget
 from components.cuentas.cuentas import CuentasWidget
 from components.clientes.clientes import ClientesWidget
+from components.usuarios.usuarios import UsuariosWidget
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -75,6 +76,10 @@ class MainWindow(QMainWindow):
         self.page_clientes = ClientesWidget()
         self.stackedPages.addWidget(self.page_clientes)
 
+        # Agregar página de usuarios
+        self.page_usuarios = UsuariosWidget()
+        self.stackedPages.addWidget(self.page_usuarios)
+
     def _on_menu_clicked(self):
         sender = self.sender()
         if isinstance(sender, QPushButton):
@@ -96,6 +101,7 @@ class MainWindow(QMainWindow):
             'btn_cargar_factura': 1,  # Índice de la página de cargar factura
             'btn_cuentas': 2,         # Índice de la página de cuentas
             'btn_clientes': 3,        # Índice de la página de clientes
+            'btn_usuarios': 4,        # Índice de la página de usuarios
         }
         
         button_name = button.objectName()
@@ -104,10 +110,26 @@ class MainWindow(QMainWindow):
         self.stackedPages.setCurrentIndex(page_index)
 
     def set_user(self, nombre: str | None, avatar_path: str | None = None):
-        """Mostrar el nombre de usuario y avatar en el encabezado del menú."""
+        """Mostrar el nombre de usuario y avatar en el encabezado del menú.
+        
+        También configura la visibilidad del botón de usuarios según el rol.
+        Solo el usuario 'admin' puede ver la opción de gestionar usuarios.
+        """
         try:
             if hasattr(self, 'lbl_user_name') and nombre:
                 self.lbl_user_name.setText(nombre)
+
+            # Configurar visibilidad del botón de usuarios (solo para admin)
+            if hasattr(self, 'btn_usuarios'):
+                is_admin = nombre and nombre.lower() == 'admin'
+                self.btn_usuarios.setVisible(is_admin)
+                
+                # Si el usuario no es admin y está en la página de usuarios, redirigir a home
+                if not is_admin and hasattr(self, 'stackedPages'):
+                    if self.stackedPages.currentIndex() == 4:  # Índice de página de usuarios
+                        self.stackedPages.setCurrentIndex(0)
+                        if self._menu_buttons:
+                            self._set_active_button(self._menu_buttons[0])
 
             # Resolver ruta por defecto de avatar
             if not avatar_path:
