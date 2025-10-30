@@ -12,6 +12,7 @@ from config.database import (
     obtener_ultimo_consumo_por_cuenta, calcular_estado_alerta_consumo, SessionLocal
 )
 from models import Alerta
+from utils.ui import resolve_ui_path
 
 
 class CuentaDialog(QDialog):
@@ -51,9 +52,9 @@ class CuentaDialog(QDialog):
 class CuentasWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Cargar UI desde archivo .ui
-        ui_path = Path(__file__).with_suffix('.ui')
-        loadUi(str(ui_path), self)
+        # Cargar UI desde archivo .ui (robusto para modo frozen/dev)
+        ui_path = resolve_ui_path(__file__)
+        loadUi(ui_path, self)
 
         # Referencias a widgets del .ui
         self.chk_mostrar_inactivas: QCheckBox

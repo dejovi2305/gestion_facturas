@@ -99,9 +99,10 @@ class OrdenPagoDialog(QDialog):
 class OrdenesPagoWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Cargar UI desde archivo .ui
-        ui_path = Path(__file__).with_suffix('.ui')
-        loadUi(str(ui_path), self)
+        # Cargar UI desde archivo .ui (robusto para modo frozen/dev)
+        from utils.ui import resolve_ui_path
+        ui_path = resolve_ui_path(__file__)
+        loadUi(ui_path, self)
 
         # Referencias a widgets del .ui
         self.tbl_ordenes: QTableWidget
