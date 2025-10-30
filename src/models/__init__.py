@@ -8,3 +8,4 @@ Base = declarative_base()
 from .usuario import Usuario  # noqa: F401
 from .cuenta import Cuenta  # noqa: F401
 from .cliente import Cliente  # noqa: F401
+from .consumo import Consumo  # noqa: F401

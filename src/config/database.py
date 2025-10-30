@@ -5,6 +5,7 @@ from models import Base
 from models.usuario import Usuario
 from models.cuenta import Cuenta
 from models.cliente import Cliente
+from models.consumo import Consumo
 
 # Crear el engine de SQLAlchemy
 DATABASE_URL = "sqlite:///app.db"
@@ -120,6 +121,82 @@ def guardar_cliente_si_no_existe(
     except Exception as e:
         db.rollback()
         return (False, f"Error al guardar el cliente: {str(e)}")
+    finally:
+        db.close()
+
+
+def guardar_consumo(
+    numero_cuenta: int,
+    consumo_kwh: float | int | None = None,
+    valor_kwh: float | None = None,
+    valor_kwh_subsidiado: float | None = None,
+    fecha_maxima_pago: str | None = None,  # formato YYYY-MM-DD
+    valor_total: float | None = None,
+    valor_total_pagar: float | None = None,
+    intereses_mora: float | None = None,
+    numero_orden: int | None = None,
+) -> tuple[bool, str, int | None]:
+    """Guarda un registro de Consumo.
+
+    - Para campos requeridos no extraídos asigna por defecto:
+      consumo_kwh=0, valor_kwh=0.0, valor_kwh_subsidiado=0.0,
+      fecha_maxima_pago=hoy, valor_total=0.0, valor_total_pagar=0.0,
+      intereses_mora=0.0, numero_orden=0
+
+    Returns: (creado, mensaje, id_consumo)
+    """
+    from datetime import date, datetime
+
+    db = SessionLocal()
+    try:
+        # Asegurar cuenta
+        cuenta = db.query(Cuenta).filter(Cuenta.numero_cuenta == numero_cuenta).first()
+        if not cuenta:
+            cuenta = Cuenta(numero_cuenta=numero_cuenta, activo=True)
+            db.add(cuenta)
+            db.commit()
+            db.refresh(cuenta)
+
+        # Normalizar valores
+        def to_int(v, default=0):
+            try:
+                return int(round(float(v)))
+            except Exception:
+                return default
+
+        def to_float(v, default=0.0):
+            try:
+                return float(v)
+            except Exception:
+                return default
+
+        if fecha_maxima_pago:
+            try:
+                fmp = datetime.strptime(fecha_maxima_pago.strip(), "%Y-%m-%d").date()
+            except Exception:
+                fmp = date.today()
+        else:
+            fmp = date.today()
+
+        consumo = Consumo(
+            cuenta=numero_cuenta,
+            consumo_kwh=to_int(consumo_kwh, 0),
+            valor_kwh=to_float(valor_kwh, 0.0),
+            valor_kwh_subsidiado=to_float(valor_kwh_subsidiado, 0.0),
+            fecha_maxima_pago=fmp,
+            valor_total=to_float(valor_total, 0.0),
+            Valor_total_pagar=to_float(valor_total_pagar, 0.0),
+            intereses_mora=to_float(intereses_mora, 0.0),
+            numero_orden=to_int(numero_orden, 0),
+        )
+
+        db.add(consumo)
+        db.commit()
+        db.refresh(consumo)
+        return True, f"Consumo registrado para cuenta {numero_cuenta} (id={consumo.id}).", consumo.id
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al guardar el consumo: {e}", None
     finally:
         db.close()
 

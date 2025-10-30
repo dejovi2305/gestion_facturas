@@ -19,6 +19,7 @@ from .factura_helperV2 import (
 )
 from config.database import guardar_cuenta_si_no_existe
 from config.database import guardar_cliente_si_no_existe
+from config.database import guardar_consumo
 
 class CargarFacturaWidget(QWidget):
     def __init__(self, parent=None):
@@ -477,6 +478,33 @@ class CargarFacturaWidget(QWidget):
                         resultado += f"   → {mensaje_cliente}\n"
                 except Exception as e:
                     resultado += f"⚠️ No se pudo registrar/actualizar el cliente: {e}\n"
+
+                # Guardar consumo usando primera línea de consumo/valor_kwh si existen
+                try:
+                    consumo_val = None
+                    if consumo_kwh_lista and len(consumo_kwh_lista) > 0:
+                        consumo_val = consumo_kwh_lista[0]
+                    valor_kwh_val = None
+                    if valor_kwh_lista and len(valor_kwh_lista) > 0:
+                        valor_kwh_val = valor_kwh_lista[0]
+
+                    creado_consumo, msg_consumo, id_consumo = guardar_consumo(
+                        numero_cuenta=numero_cuenta_int,
+                        consumo_kwh=consumo_val,
+                        valor_kwh=valor_kwh_val,
+                        valor_kwh_subsidiado=None,  # aún no extraído
+                        fecha_maxima_pago=fecha_maxima_pago if fecha_maxima_pago else None,
+                        valor_total=valor_total_xml if 'valor_total_xml' in locals() else None,
+                        valor_total_pagar=valor_total_pagar_xml if 'valor_total_pagar_xml' in locals() else None,
+                        intereses_mora=None,
+                        numero_orden=None,
+                    )
+                    if creado_consumo:
+                        resultado += f"✓ Consumo registrado (id={id_consumo})\n"
+                    else:
+                        resultado += f"⚠️ No se registró consumo: {msg_consumo}\n"
+                except Exception as e:
+                    resultado += f"⚠️ Error registrando consumo: {e}\n"
 
                 self.txt_resultado.setPlainText(resultado)
             else:
