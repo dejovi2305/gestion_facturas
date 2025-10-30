@@ -521,56 +521,8 @@ class CargarFacturaWidget(QWidget):
                 if cufe_xml:
                     resultado += f"🔑 CUFE/CUDE: {cufe_xml}\n\n"
                 
-                resultado += "Detalles de hallazgos (valor, ruta):\n"
-                for val, ruta in detalles:
-                    resultado += f"  - {val} @ {ruta}\n"
-                if detalles_nombre:
-                    resultado += "\nDetalles de hallazgos de nombre (valor, ruta):\n"
-                    for val, ruta in detalles_nombre:
-                        resultado += f"  - {val} @ {ruta}\n"
-                if detalles_dir:
-                    resultado += "\nDetalles de hallazgos de dirección (valor, ruta):\n"
-                    for val, ruta in detalles_dir:
-                        resultado += f"  - {val} @ {ruta}\n"
-                if detalles_estrato:
-                    resultado += "\nDetalles de hallazgos de estrato (valor, ruta):\n"
-                    for val, ruta in detalles_estrato:
-                        resultado += f"  - {val} @ {ruta}\n"
-                if detalles_medidor:
-                    resultado += "\nDetalles de hallazgos de medidor (valor, ruta):\n"
-                    for val, ruta in detalles_medidor:
-                        resultado += f"  - {val} @ {ruta}\n"
-                
-                if detalles_consumo:
-                    resultado += "\nDetalles de hallazgos de consumo kWh (valor, ruta):\n"
-                    for val, ruta in detalles_consumo:
-                        resultado += f"  - {val} @ {ruta}\n"
-                
-                if detalles_valor:
-                    resultado += "\nDetalles de hallazgos de valor kWh (valor, ruta):\n"
-                    for val, ruta in detalles_valor:
-                        resultado += f"  - {val} @ {ruta}\n"
-                
-                if detalles_fecha:
-                    resultado += "\nDetalles de hallazgos de fecha máxima de pago (valor, ruta):\n"
-                    for val, ruta in detalles_fecha:
-                        resultado += f"  - {val} @ {ruta}\n"
-
-                if detalles_total:
-                    resultado += "\nDetalles de hallazgos de valor total (LineExtensionAmount):\n"
-                    for val, ruta in detalles_total:
-                        resultado += f"  - {val} @ {ruta}\n"
-                if detalles_total_pagar:
-                    resultado += "\nDetalles de hallazgos de valor total a pagar (PayableAmount):\n"
-                    for val, ruta in detalles_total_pagar:
-                        resultado += f"  - {val} @ {ruta}\n"
-                if detalles_cufe:
-                    resultado += "\nDetalles de hallazgos de CUFE/CUDE (valor, ruta):\n"
-                    for val, ruta in detalles_cufe:
-                        resultado += f"  - {val} @ {ruta}\n"
-
                 # Reportar estado de cuenta/cliente según caso
-                resultado += "\n"
+                resultado += f"{'='*30}\n\n"
                 if cuenta_nueva:
                     resultado += "✓ Nueva cuenta registrada\n"
                 else:
