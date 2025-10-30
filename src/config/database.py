@@ -93,6 +93,96 @@ def guardar_cuenta_si_no_existe(numero_cuenta: int) -> tuple[bool, str]:
         db.close()
 
 
+# ===== Cuentas: CRUD helpers =====
+def listar_cuentas(activo: bool | None = True) -> list[Cuenta]:
+    """Lista cuentas por estado.
+
+    activo=True -> solo activas; False -> solo inactivas; None -> todas.
+    """
+    db = SessionLocal()
+    try:
+        q = db.query(Cuenta)
+        if activo is True:
+            q = q.filter(Cuenta.activo.is_(True))
+        elif activo is False:
+            q = q.filter(Cuenta.activo.is_(False))
+        return q.order_by(Cuenta.numero_cuenta.asc()).all()
+    finally:
+        db.close()
+
+
+def crear_cuenta(numero_cuenta: int, activo: bool = True) -> tuple[bool, str, int | None]:
+    """Crea una cuenta nueva, validando unicidad de numero_cuenta."""
+    db = SessionLocal()
+    try:
+        existente = db.query(Cuenta).filter(Cuenta.numero_cuenta == numero_cuenta).first()
+        if existente:
+            return False, f"Ya existe la cuenta {numero_cuenta}.", existente.id
+        c = Cuenta(numero_cuenta=numero_cuenta, activo=bool(activo))
+        db.add(c)
+        db.commit()
+        db.refresh(c)
+        return True, f"Cuenta {numero_cuenta} creada.", c.id
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al crear cuenta: {e}", None
+    finally:
+        db.close()
+
+
+def actualizar_cuenta(cuenta_id: int, numero_cuenta: int | None = None, activo: bool | None = None) -> tuple[bool, str]:
+    """Actualiza numero_cuenta y/o activo de una cuenta existente."""
+    db = SessionLocal()
+    try:
+        c = db.query(Cuenta).filter(Cuenta.id == cuenta_id).first()
+        if not c:
+            return False, "Cuenta no encontrada."
+        if numero_cuenta is not None and numero_cuenta != c.numero_cuenta:
+            # Validar unicidad
+            dup = db.query(Cuenta).filter(Cuenta.numero_cuenta == numero_cuenta).first()
+            if dup:
+                return False, f"Ya existe la cuenta {numero_cuenta}."
+            # Si hay Cliente o Consumo, actualizar FKs si aplica (usan numero_cuenta)
+            # Cliente.cuenta y Consumo.cuenta referencian el número, por tanto cambiar numero_cuenta
+            # puede requerir lógica adicional; por simplicidad lo permitimos si no hay referencias.
+            tiene_cliente = db.query(Cliente).filter(Cliente.cuenta == c.numero_cuenta).first() is not None
+            tiene_consumo = db.query(Consumo).filter(Consumo.cuenta == c.numero_cuenta).first() is not None
+            if tiene_cliente or tiene_consumo:
+                return False, "No se puede cambiar el número de cuenta porque tiene referencias (Cliente/Consumo)."
+            c.numero_cuenta = numero_cuenta
+        if activo is not None:
+            c.activo = bool(activo)
+        db.commit()
+        return True, "Cuenta actualizada."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al actualizar cuenta: {e}"
+    finally:
+        db.close()
+
+
+def eliminar_cuenta(cuenta_id: int) -> tuple[bool, str]:
+    """Elimina una cuenta si no tiene referencias (Cliente/Consumo)."""
+    db = SessionLocal()
+    try:
+        c = db.query(Cuenta).filter(Cuenta.id == cuenta_id).first()
+        if not c:
+            return False, "Cuenta no encontrada."
+        # Bloquear eliminación si hay referencias
+        tiene_cliente = db.query(Cliente).filter(Cliente.cuenta == c.numero_cuenta).first() is not None
+        tiene_consumo = db.query(Consumo).filter(Consumo.cuenta == c.numero_cuenta).first() is not None
+        if tiene_cliente or tiene_consumo:
+            return False, "No se puede eliminar la cuenta: existen registros relacionados (Cliente/Consumo)."
+        db.delete(c)
+        db.commit()
+        return True, "Cuenta eliminada."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al eliminar cuenta: {e}"
+    finally:
+        db.close()
+
+
 def guardar_cliente_si_no_existe(
     numero_cuenta: int,
     nombre: str | None = None,
