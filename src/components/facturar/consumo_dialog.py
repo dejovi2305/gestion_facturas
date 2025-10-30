@@ -7,8 +7,10 @@ from PyQt6.QtWidgets import (
     QDateEdit,
     QVBoxLayout,
     QLineEdit,
+    QComboBox,
 )
 from PyQt6.QtCore import QDate
+from config.database import listar_ordenes_pago
 
 
 class ConsumoDialog(QDialog):
@@ -23,22 +25,22 @@ class ConsumoDialog(QDialog):
     - valor_total (float, 2 decimales)
     - valor_total_pagar (float, 2 decimales)
     - intereses_mora (float, 2 decimales)
-    - numero_orden (int)
+    - orden_pago_id (int) - Seleccionado desde combo de órdenes
     """
 
     def __init__(
         self,
         parent=None,
         *,
-    cufe: str | None = None,
-    consumo_kwh: int | float | None = None,
+        cufe: str | None = None,
+        consumo_kwh: int | float | None = None,
         valor_kwh: float | None = None,
         valor_kwh_subsidiado: float | None = None,
         fecha_maxima_pago: str | None = None,  # YYYY-MM-DD
         valor_total: float | None = None,
         valor_total_pagar: float | None = None,
         intereses_mora: float | None = None,
-        numero_orden: int | None = None,
+        orden_pago_id: int | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Revisar Consumo")
@@ -132,15 +134,27 @@ class ConsumoDialog(QDialog):
                 pass
         form.addRow("Intereses de mora (COP)", self.sp_mora)
 
-        # Número de orden
-        self.sp_orden = QSpinBox(self)
-        self.sp_orden.setRange(0, 1_000_000_000)
-        if numero_orden is not None:
-            try:
-                self.sp_orden.setValue(int(numero_orden))
-            except Exception:
-                pass
-        form.addRow("Número de orden", self.sp_orden)
+        # Orden de pago (combo)
+        self.combo_orden_pago = QComboBox(self)
+        self.combo_orden_pago.setMinimumWidth(250)
+        ordenes = listar_ordenes_pago()
+        for orden in ordenes:
+            # Mostrar: "Orden #123 - $1,234.56"
+            texto = f"Orden #{orden.numero_orden} - ${float(orden.valor):.2f}"
+            self.combo_orden_pago.addItem(texto, orden.id)
+        
+        # Seleccionar orden por defecto (orden semilla o la especificada)
+        if orden_pago_id is not None:
+            index = self.combo_orden_pago.findData(orden_pago_id)
+            if index >= 0:
+                self.combo_orden_pago.setCurrentIndex(index)
+        else:
+            # Buscar la orden semilla (id=1)
+            index = self.combo_orden_pago.findData(1)
+            if index >= 0:
+                self.combo_orden_pago.setCurrentIndex(index)
+        
+        form.addRow("Orden de pago", self.combo_orden_pago)
 
         layout.addLayout(form)
 
@@ -165,5 +179,5 @@ class ConsumoDialog(QDialog):
             "valor_total": float(self.sp_valor_total.value()),
             "valor_total_pagar": float(self.sp_valor_total_pagar.value()),
             "intereses_mora": float(self.sp_mora.value()),
-            "numero_orden": int(self.sp_orden.value()),
+            "orden_pago_id": self.combo_orden_pago.currentData(),
         }

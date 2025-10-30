@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QDate
 from config.database import (
     listar_consumos, obtener_consumo_por_id, actualizar_consumo, eliminar_consumo,
-    listar_cuentas
+    listar_cuentas, listar_ordenes_pago
 )
 from decimal import Decimal
 
@@ -102,10 +102,20 @@ class ConsumoDialog(QDialog):
         self.ed_intereses.setPlaceholderText("Intereses de mora")
         self.ed_intereses.setText(str(consumo_data.get("intereses_mora", "")) if consumo_data else "")
 
-        # Número de orden
-        self.ed_numero_orden = QLineEdit(self)
-        self.ed_numero_orden.setPlaceholderText("Número de orden")
-        self.ed_numero_orden.setText(str(consumo_data.get("numero_orden", "")) if consumo_data else "")
+        # Orden de pago (combo)
+        self.combo_orden_pago = QComboBox(self)
+        self.combo_orden_pago.setMinimumWidth(250)
+        ordenes = listar_ordenes_pago()
+        for orden in ordenes:
+            # Mostrar: "Orden #123 - $1,234.56"
+            texto = f"Orden #{orden.numero_orden} - ${float(orden.valor):.2f}"
+            self.combo_orden_pago.addItem(texto, orden.id)
+        
+        # Seleccionar orden actual en modo edición
+        if consumo_data and consumo_data.get("orden_pago_id"):
+            index = self.combo_orden_pago.findData(consumo_data["orden_pago_id"])
+            if index >= 0:
+                self.combo_orden_pago.setCurrentIndex(index)
 
         form.addRow("Consumo kWh:", self.ed_consumo_kwh)
         form.addRow("Valor kWh:", self.ed_valor_kwh)
@@ -114,7 +124,7 @@ class ConsumoDialog(QDialog):
         form.addRow("Valor Total:", self.ed_valor_total)
         form.addRow("Total a Pagar:", self.ed_total_pagar)
         form.addRow("Intereses Mora:", self.ed_intereses)
-        form.addRow("Núm. Orden:", self.ed_numero_orden)
+        form.addRow("Orden de Pago:", self.combo_orden_pago)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel,
@@ -158,9 +168,14 @@ class ConsumoDialog(QDialog):
             float(self.ed_valor_total.text().strip())
             float(self.ed_total_pagar.text().strip())
             float(self.ed_intereses.text().strip())
-            int(self.ed_numero_orden.text().strip())
         except Exception:
             QMessageBox.warning(self, "Validación", "Verifique que todos los valores numéricos sean válidos.")
+            return
+        
+        # Validar orden de pago
+        orden_pago_id = self.combo_orden_pago.currentData()
+        if orden_pago_id is None:
+            QMessageBox.warning(self, "Validación", "Seleccione una orden de pago válida.")
             return
 
         self.accept()
@@ -175,7 +190,7 @@ class ConsumoDialog(QDialog):
             "valor_total": float(self.ed_valor_total.text().strip()),
             "valor_total_pagar": float(self.ed_total_pagar.text().strip()),
             "intereses_mora": float(self.ed_intereses.text().strip()),
-            "numero_orden": int(self.ed_numero_orden.text().strip()),
+            "orden_pago_id": self.combo_orden_pago.currentData(),
         }
         
         # Agregar cuenta solo en modo creación
@@ -212,7 +227,7 @@ class ConsumosWidget(QWidget):
         self.tbl.setColumnCount(8)
         self.tbl.setHorizontalHeaderLabels([
             "ID", "Cuenta", "CUFE", "Consumo kWh", "Valor kWh", 
-            "Fecha Max. Pago", "Núm. Orden", "Total a Pagar"
+            "Fecha Max. Pago", "Orden Pago", "Total a Pagar"
         ])
         self.tbl.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tbl.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -228,7 +243,7 @@ class ConsumosWidget(QWidget):
         self.tbl.setColumnWidth(3, 100)  # Consumo kWh
         self.tbl.setColumnWidth(4, 100)  # Valor kWh
         self.tbl.setColumnWidth(5, 120)  # Fecha
-        self.tbl.setColumnWidth(6, 100)  # Núm. Orden
+        self.tbl.setColumnWidth(6, 100)  # Orden Pago
         self.tbl.setColumnWidth(7, 100)  # Total a Pagar
 
         # Cargar combo de cuentas
@@ -270,7 +285,9 @@ class ConsumosWidget(QWidget):
                 consumo_item = QTableWidgetItem(str(c.consumo_kwh))
                 valor_kwh_item = QTableWidgetItem(f"${float(c.valor_kwh):.2f}")
                 fecha_item = QTableWidgetItem(c.fecha_maxima_pago.strftime("%Y-%m-%d"))
-                orden_item = QTableWidgetItem(str(c.numero_orden))
+                # Mostrar número de orden de la orden de pago asociada
+                orden_texto = f"#{c.orden_pago_rel.numero_orden}" if c.orden_pago_rel else "N/A"
+                orden_item = QTableWidgetItem(orden_texto)
                 orden_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 pagar_item = QTableWidgetItem(f"${float(c.Valor_total_pagar):.2f}")
 
@@ -313,7 +330,7 @@ class ConsumosWidget(QWidget):
                 valor_total=vals["valor_total"],
                 valor_total_pagar=vals["valor_total_pagar"],
                 intereses_mora=vals["intereses_mora"],
-                numero_orden=vals["numero_orden"]
+                orden_pago_id=vals["orden_pago_id"]
             )
             
             if ok:
@@ -344,7 +361,7 @@ class ConsumosWidget(QWidget):
             "valor_total": float(consumo.valor_total),
             "valor_total_pagar": float(consumo.Valor_total_pagar),
             "intereses_mora": float(consumo.intereses_mora),
-            "numero_orden": consumo.numero_orden,
+            "orden_pago_id": consumo.orden_pago_id,
         }
         
         dlg = ConsumoDialog(self, titulo="Editar consumo", consumo_data=consumo_data)
@@ -359,7 +376,7 @@ class ConsumosWidget(QWidget):
                 valor_total=vals["valor_total"],
                 valor_total_pagar=vals["valor_total_pagar"],
                 intereses_mora=vals["intereses_mora"],
-                numero_orden=vals["numero_orden"]
+                orden_pago_id=vals["orden_pago_id"]
             )
             if ok:
                 QMessageBox.information(self, "Editar consumo", msg)

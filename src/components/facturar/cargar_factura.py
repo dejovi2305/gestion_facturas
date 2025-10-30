@@ -215,7 +215,7 @@ class CargarFacturaWidget(QWidget):
                         valor_total=valor_total_xml if 'valor_total_xml' in locals() else None,
                         valor_total_pagar=valor_total_pagar_xml if 'valor_total_pagar_xml' in locals() else None,
                         intereses_mora=None,
-                        numero_orden=None,
+                        orden_pago_id=1,  # Orden semilla por defecto
                     )
                     if dlg.exec():
                         vals = dlg.values()
@@ -229,7 +229,7 @@ class CargarFacturaWidget(QWidget):
                             valor_total=vals["valor_total"],
                             valor_total_pagar=vals["valor_total_pagar"],
                             intereses_mora=vals["intereses_mora"],
-                            numero_orden=vals["numero_orden"],
+                            orden_pago_id=vals.get("orden_pago_id", 1),  # Default a orden semilla
                         )
                         if creado_consumo:
                             resultado += f"✓ Consumo registrado (id={id_consumo})\n"

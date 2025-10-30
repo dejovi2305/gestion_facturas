@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, joinedload
 from datetime import datetime
 from models import Base
 from models.usuario import Usuario
@@ -17,10 +17,11 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def initialize_database():
-    """Inicializa la base de datos y crea usuario admin por defecto con contraseña encriptada."""
+    """Inicializa la base de datos, crea usuario admin y orden de pago semilla."""
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
+        # Crear usuario admin si no existe
         admin_user = db.query(Usuario).filter(Usuario.nombre_usuario == "admin").first()
         if not admin_user:
             # Encriptar contraseña del admin
@@ -35,7 +36,19 @@ def initialize_database():
                 activo=True
             )
             db.add(admin_user)
-            db.commit()
+        
+        # Crear orden de pago semilla (orden 0) si no existe
+        orden_semilla = db.query(OrdenPago).filter(OrdenPago.id == 1).first()
+        if not orden_semilla:
+            orden_semilla = OrdenPago(
+                id=1,
+                numero_orden=0,
+                fecha=datetime.now().date(),
+                valor=0
+            )
+            db.add(orden_semilla)
+        
+        db.commit()
     except Exception as e:
         print(f"Error initializing database: {e}")
         db.rollback()
@@ -377,14 +390,14 @@ def guardar_consumo(
     valor_total: float | None = None,
     valor_total_pagar: float | None = None,
     intereses_mora: float | None = None,
-    numero_orden: int | None = None,
+    orden_pago_id: int | None = None,
 ) -> tuple[bool, str, int | None]:
     """Guarda un registro de Consumo.
 
     - Para campos requeridos no extraídos asigna por defecto:
       consumo_kwh=0, valor_kwh=0.0, valor_kwh_subsidiado=0.0,
       fecha_maxima_pago=hoy, valor_total=0.0, valor_total_pagar=0.0,
-      intereses_mora=0.0, numero_orden=0
+      intereses_mora=0.0, orden_pago_id=1 (orden semilla)
 
     Returns: (creado, mensaje, id_consumo)
     """
@@ -432,6 +445,10 @@ def guardar_consumo(
         else:
             fmp = date.today()
 
+        # Si no se proporciona orden_pago_id, usar la orden semilla (id=1)
+        if orden_pago_id is None:
+            orden_pago_id = 1
+
         consumo = Consumo(
             cuenta=numero_cuenta,
             cufe=cufe,
@@ -442,7 +459,7 @@ def guardar_consumo(
             valor_total=to_float(valor_total, 0.0),
             Valor_total_pagar=to_float(valor_total_pagar, 0.0),
             intereses_mora=to_float(intereses_mora, 0.0),
-            numero_orden=to_int(numero_orden, 0),
+            orden_pago_id=orden_pago_id,
         )
 
         db.add(consumo)
@@ -646,7 +663,7 @@ def listar_consumos(cuenta: int | None = None, limite: int | None = None) -> lis
     """
     db = SessionLocal()
     try:
-        q = db.query(Consumo)
+        q = db.query(Consumo).options(joinedload(Consumo.orden_pago_rel))
         if cuenta is not None:
             q = q.filter(Consumo.cuenta == cuenta)
         q = q.order_by(Consumo.fecha_maxima_pago.desc())
@@ -675,7 +692,7 @@ def actualizar_consumo(
     valor_total: float | None = None,
     valor_total_pagar: float | None = None,
     intereses_mora: float | None = None,
-    numero_orden: int | None = None
+    orden_pago_id: int | None = None
 ) -> tuple[bool, str]:
     """Actualiza campos de un consumo existente."""
     from datetime import datetime
@@ -703,8 +720,8 @@ def actualizar_consumo(
             c.Valor_total_pagar = float(valor_total_pagar)
         if intereses_mora is not None:
             c.intereses_mora = float(intereses_mora)
-        if numero_orden is not None:
-            c.numero_orden = int(numero_orden)
+        if orden_pago_id is not None:
+            c.orden_pago_id = int(orden_pago_id)
         
         db.commit()
         return True, "Consumo actualizado exitosamente."
