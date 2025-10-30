@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QMessageBox, QHeaderView, QDateEdit
 )
 from PyQt6.QtCore import Qt, QDate
+
 from config.database import (
     listar_consumos, obtener_consumo_por_id, actualizar_consumo, eliminar_consumo,
     listar_cuentas, listar_ordenes_pago
@@ -279,18 +280,29 @@ class ConsumosWidget(QWidget):
             for i, c in enumerate(consumos):
                 id_item = QTableWidgetItem(str(c.id))
                 id_item.setData(Qt.ItemDataRole.UserRole, c.id)
+                
                 cuenta_item = QTableWidgetItem(str(c.cuenta))
+                cuenta_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                
                 cufe_item = QTableWidgetItem(c.cufe[:20] + "..." if len(c.cufe) > 20 else c.cufe)
-                cufe_item.setToolTip(c.cufe)  # Mostrar CUFE completo en tooltip
+                cufe_item.setToolTip(c.cufe)
+                
                 consumo_item = QTableWidgetItem(str(c.consumo_kwh))
+                consumo_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                
                 valor_kwh_item = QTableWidgetItem(f"${float(c.valor_kwh):.2f}")
+                valor_kwh_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                
                 fecha_item = QTableWidgetItem(c.fecha_maxima_pago.strftime("%Y-%m-%d"))
-                # Mostrar número de orden de la orden de pago asociada
+                fecha_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                
                 orden_texto = f"#{c.orden_pago_rel.numero_orden}" if c.orden_pago_rel else "N/A"
                 orden_item = QTableWidgetItem(orden_texto)
                 orden_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                
                 pagar_item = QTableWidgetItem(f"${float(c.Valor_total_pagar):.2f}")
-
+                pagar_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                
                 self.tbl.setItem(i, 0, id_item)
                 self.tbl.setItem(i, 1, cuenta_item)
                 self.tbl.setItem(i, 2, cufe_item)
@@ -306,7 +318,7 @@ class ConsumosWidget(QWidget):
         sel = self.tbl.currentRow()
         if sel < 0:
             return None
-        item = self.tbl.item(sel, 0)
+        item = self.tbl.item(sel, 0)  # Columna 0 contiene el ID
         if not item:
             return None
         return int(item.data(Qt.ItemDataRole.UserRole))

@@ -1,6 +1,7 @@
 import os, sys
 from PyQt6.QtWidgets import QMainWindow, QPushButton, QMessageBox
 from PyQt6.QtGui import QPixmap, QIcon
+from PyQt6.QtCore import QTimer
 from PyQt6.uic import loadUi
 from components.facturar.cargar_factura import CargarFacturaWidget
 from components.cuentas.cuentas import CuentasWidget
@@ -9,6 +10,7 @@ from components.usuarios.usuarios import UsuariosWidget
 from components.consumos.consumos import ConsumosWidget
 from components.ordenes_pago.ordenes_pago import OrdenesPagoWidget
 from components.alertas.alertas import AlertasWidget
+from components.alertas.dialogo_vencimientos import mostrar_alertas_si_existen
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -55,6 +57,17 @@ class MainWindow(QMainWindow):
         # Conectar botón de salir
         if hasattr(self, 'btn_salir'):
             self.btn_salir.clicked.connect(self._on_salir)
+        
+        # Mostrar alertas después de que la ventana se haya mostrado
+        QTimer.singleShot(500, self._mostrar_alertas_inicio)
+    
+    def _mostrar_alertas_inicio(self):
+        """Muestra el diálogo de alertas de vencimiento al iniciar."""
+        try:
+            mostrar_alertas_si_existen(self)
+        except Exception as e:
+            # No bloquear la aplicación si hay error al mostrar alertas
+            print(f"Error al mostrar alertas: {e}")
     
     def _init_pages(self):
         """Inicializar las páginas del stackedWidget."""

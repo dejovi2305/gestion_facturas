@@ -6,8 +6,11 @@ from PyQt6.QtWidgets import (
     QLineEdit, QMessageBox, QHeaderView
 )
 from PyQt6.QtCore import Qt, QRegularExpression
-from PyQt6.QtGui import QRegularExpressionValidator
-from config.database import listar_cuentas, crear_cuenta, actualizar_cuenta, eliminar_cuenta
+from PyQt6.QtGui import QRegularExpressionValidator, QColor, QBrush
+from config.database import (
+    listar_cuentas, crear_cuenta, actualizar_cuenta, eliminar_cuenta,
+    obtener_ultimo_consumo_por_cuenta, calcular_estado_alerta_consumo
+)
 
 
 class CuentaDialog(QDialog):
@@ -68,8 +71,8 @@ class CuentasWidget(QWidget):
 
         # Configurar tabla para estabilidad de tamaño (no cambiar ancho en cada refresh)
         self.tbl: QTableWidget = self.tbl_cuentas
-        self.tbl.setColumnCount(3)
-        self.tbl.setHorizontalHeaderLabels(["ID", "Número de cuenta", "Activa"])
+        self.tbl.setColumnCount(5)
+        self.tbl.setHorizontalHeaderLabels(["Estado", "ID", "Número de cuenta", "Días Restantes", "Activa"])
         self.tbl.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tbl.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tbl.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -78,9 +81,11 @@ class CuentasWidget(QWidget):
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         header.setStretchLastSection(True)
         # Establecer anchos iniciales estables
-        self.tbl.setColumnWidth(0, 80)
-        self.tbl.setColumnWidth(1, 220)
-        self.tbl.setColumnWidth(2, 80)
+        self.tbl.setColumnWidth(0, 120)  # Estado
+        self.tbl.setColumnWidth(1, 60)   # ID
+        self.tbl.setColumnWidth(2, 150)  # Número de cuenta
+        self.tbl.setColumnWidth(3, 150)  # Días Restantes
+        self.tbl.setColumnWidth(4, 80)   # Activa
 
         self._refrescar()
 
@@ -100,14 +105,63 @@ class CuentasWidget(QWidget):
         try:
             self.tbl.setRowCount(len(cuentas))
             for i, c in enumerate(cuentas):
+                # Obtener último consumo y calcular estado de alerta
+                ultimo_consumo = obtener_ultimo_consumo_por_cuenta(c.numero_cuenta)
+                
+                if ultimo_consumo:
+                    info_alerta = calcular_estado_alerta_consumo(ultimo_consumo)
+                    estado = info_alerta['estado']
+                    dias_restantes = info_alerta['dias_restantes']
+                    
+                    # Determinar color y texto del semáforo
+                    if estado == 'vencido':
+                        estado_texto = "🔴 VENCIDO"
+                        color_fondo = QColor(255, 200, 200)
+                    elif estado == 'urgente':
+                        estado_texto = "🟠 HOY"
+                        color_fondo = QColor(255, 220, 150)
+                    elif estado == 'proximo':
+                        estado_texto = "🟡 PRÓXIMO"
+                        color_fondo = QColor(255, 255, 200)
+                    else:
+                        estado_texto = "🟢 OK"
+                        color_fondo = QColor(200, 255, 200)
+                    
+                    # Texto de días restantes
+                    if dias_restantes < 0:
+                        dias_texto = f"{abs(dias_restantes)} días atrasado"
+                    elif dias_restantes == 0:
+                        dias_texto = "Hoy"
+                    else:
+                        dias_texto = f"{dias_restantes} días"
+                else:
+                    estado_texto = "⚪ Sin consumos"
+                    color_fondo = QColor(240, 240, 240)
+                    dias_texto = "N/A"
+                
+                # Crear items
+                estado_item = QTableWidgetItem(estado_texto)
+                estado_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                estado_item.setBackground(QBrush(color_fondo))
+                
                 id_item = QTableWidgetItem(str(c.id))
                 id_item.setData(Qt.ItemDataRole.UserRole, c.id)
+                
                 num_item = QTableWidgetItem(str(c.numero_cuenta))
+                num_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                
+                dias_item = QTableWidgetItem(dias_texto)
+                dias_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                dias_item.setBackground(QBrush(color_fondo))
+                
                 act_item = QTableWidgetItem("Sí" if c.activo else "No")
                 act_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.tbl.setItem(i, 0, id_item)
-                self.tbl.setItem(i, 1, num_item)
-                self.tbl.setItem(i, 2, act_item)
+                
+                self.tbl.setItem(i, 0, estado_item)
+                self.tbl.setItem(i, 1, id_item)
+                self.tbl.setItem(i, 2, num_item)
+                self.tbl.setItem(i, 3, dias_item)
+                self.tbl.setItem(i, 4, act_item)
         finally:
             self.tbl.setUpdatesEnabled(True)
 
@@ -115,7 +169,7 @@ class CuentasWidget(QWidget):
         sel = self.tbl.currentRow()
         if sel < 0:
             return None
-        item = self.tbl.item(sel, 0)
+        item = self.tbl.item(sel, 1)  # Columna 1 ahora tiene el ID
         if not item:
             return None
         return int(item.data(Qt.ItemDataRole.UserRole))
@@ -140,8 +194,8 @@ class CuentasWidget(QWidget):
             return
         # Pre-cargar desde tabla
         row = self.tbl.currentRow()
-        num_txt = self.tbl.item(row, 1).text() if self.tbl.item(row, 1) else "0"
-        act_txt = self.tbl.item(row, 2).text() if self.tbl.item(row, 2) else "No"
+        num_txt = self.tbl.item(row, 2).text() if self.tbl.item(row, 2) else "0"
+        act_txt = self.tbl.item(row, 4).text() if self.tbl.item(row, 4) else "No"
         dlg = CuentaDialog(self, titulo="Editar cuenta", numero_cuenta=int(num_txt), activo=(act_txt == "Sí"))
         if dlg.exec():
             vals = dlg.values()

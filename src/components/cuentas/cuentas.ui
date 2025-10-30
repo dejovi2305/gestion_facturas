@@ -55,12 +55,22 @@
      </property>
      <column>
       <property name="text">
+       <string>Estado</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
        <string>ID</string>
       </property>
      </column>
      <column>
       <property name="text">
        <string>Número de cuenta</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Días Restantes</string>
       </property>
      </column>
      <column>

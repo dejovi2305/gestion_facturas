@@ -1024,6 +1024,185 @@ def eliminar_alerta(alerta_id: int) -> tuple[bool, str]:
         db.close()
 
 
+# =====================================================================
+# Sistema de Alertas de Vencimiento
+# =====================================================================
+
+def obtener_ultimo_consumo_por_cuenta(cuenta: int):
+    """Obtiene el último consumo registrado (más reciente) para una cuenta.
+    
+    Args:
+        cuenta: Número de cuenta
+    
+    Returns:
+        Objeto Consumo más reciente o None si no hay consumos
+    """
+    db = SessionLocal()
+    try:
+        consumo = db.query(Consumo).options(joinedload(Consumo.orden_pago_rel))\
+            .filter(Consumo.cuenta == cuenta)\
+            .order_by(Consumo.fecha_maxima_pago.desc())\
+            .first()
+        return consumo
+    finally:
+        db.close()
+
+
+def calcular_estado_alerta_consumo(consumo, fecha_actual=None):
+    """Calcula el estado de alerta de un consumo basado en su fecha de vencimiento.
+    
+    Args:
+        consumo: Objeto Consumo con fecha_maxima_pago y cuenta
+        fecha_actual: Fecha de referencia (default: hoy)
+    
+    Returns:
+        dict con:
+            - estado: 'vencido', 'urgente', 'proximo', 'ok'
+            - dias_restantes: días hasta vencimiento (negativo si vencido)
+            - fecha_alerta: fecha en que se debe alertar según días hábiles configurados
+            - dias_habiles: días hábiles configurados para la cuenta (0 si no hay alerta)
+    """
+    from datetime import date
+    
+    if fecha_actual is None:
+        fecha_actual = date.today()
+    
+    # Calcular días restantes hasta vencimiento
+    dias_restantes = (consumo.fecha_maxima_pago - fecha_actual).days
+    
+    # Obtener configuración de alerta para la cuenta
+    db = SessionLocal()
+    try:
+        alerta = db.query(Alerta).filter(Alerta.cuenta == consumo.cuenta).first()
+        dias_habiles = alerta.dias_habiles if alerta else 0
+    finally:
+        db.close()
+    
+    # Calcular fecha de alerta (fecha_vencimiento - dias_habiles)
+    from datetime import timedelta
+    fecha_alerta = consumo.fecha_maxima_pago - timedelta(days=dias_habiles)
+    
+    # Determinar estado según días restantes
+    if dias_restantes < 0:
+        estado = 'vencido'
+    elif dias_restantes == 0:
+        estado = 'urgente'
+    elif fecha_actual >= fecha_alerta:
+        # Ya pasamos la fecha de alerta
+        estado = 'proximo'
+    else:
+        estado = 'ok'
+    
+    return {
+        'estado': estado,
+        'dias_restantes': dias_restantes,
+        'fecha_alerta': fecha_alerta,
+        'dias_habiles': dias_habiles
+    }
+
+
+def obtener_alertas_ultimos_consumos(cuenta: int = None, solo_alertas: bool = False):
+    """Obtiene alertas basadas en el último consumo de cada cuenta.
+    
+    Esta función considera SOLO el consumo más reciente de cada cuenta para calcular alertas,
+    ya que los consumos se registran mes a mes y solo el último es relevante para alertas.
+    
+    Args:
+        cuenta: Filtrar por cuenta específica (None = todas las cuentas)
+        solo_alertas: Si True, solo retorna cuentas con estado vencido, urgente o próximo
+    
+    Returns:
+        Lista de tuplas (consumo_ultimo, info_alerta) donde consumo_ultimo es el más reciente
+    """
+    db = SessionLocal()
+    try:
+        # Obtener todas las cuentas activas o solo la especificada
+        if cuenta is not None:
+            cuentas = [db.query(Cuenta).filter(Cuenta.numero_cuenta == cuenta).first()]
+            if not cuentas[0]:
+                return []
+        else:
+            cuentas = db.query(Cuenta).filter(Cuenta.activo == True).all()
+        
+        resultado = []
+        
+        for c in cuentas:
+            # Obtener el último consumo de esta cuenta
+            ultimo_consumo = obtener_ultimo_consumo_por_cuenta(c.numero_cuenta)
+            
+            if ultimo_consumo:
+                # Calcular estado de alerta del último consumo
+                info_alerta = calcular_estado_alerta_consumo(ultimo_consumo)
+                
+                if solo_alertas:
+                    if info_alerta['estado'] in ['vencido', 'urgente', 'proximo']:
+                        resultado.append((ultimo_consumo, info_alerta))
+                else:
+                    resultado.append((ultimo_consumo, info_alerta))
+        
+        return resultado
+    finally:
+        db.close()
+
+
+def obtener_consumos_con_alertas(cuenta: int = None, solo_alertas: bool = False):
+    """Obtiene consumos con su información de alerta calculada.
+    
+    DEPRECADO: Esta función calcula alertas para TODOS los consumos.
+    Se recomienda usar obtener_alertas_ultimos_consumos() que solo considera
+    el último consumo de cada cuenta.
+    
+    Args:
+        cuenta: Filtrar por cuenta específica
+        solo_alertas: Si True, solo retorna consumos en estado vencido, urgente o próximo
+    
+    Returns:
+        Lista de tuplas (consumo, info_alerta)
+    """
+    consumos = listar_consumos(cuenta=cuenta)
+    resultado = []
+    
+    for c in consumos:
+        info_alerta = calcular_estado_alerta_consumo(c)
+        
+        if solo_alertas:
+            if info_alerta['estado'] in ['vencido', 'urgente', 'proximo']:
+                resultado.append((c, info_alerta))
+        else:
+            resultado.append((c, info_alerta))
+    
+    return resultado
+
+
+def obtener_resumen_alertas_por_cuenta():
+    """Obtiene un resumen de alertas basado en el último consumo de cada cuenta.
+    
+    Returns:
+        dict con estructura:
+        {
+            numero_cuenta: {
+                'estado': 'vencido' | 'urgente' | 'proximo' | 'ok',
+                'dias_restantes': int,
+                'fecha_vencimiento': date,
+                'tiene_alerta': bool
+            }
+        }
+    """
+    alertas_ultimos = obtener_alertas_ultimos_consumos(solo_alertas=False)
+    resumen = {}
+    
+    for consumo, info_alerta in alertas_ultimos:
+        cuenta = consumo.cuenta
+        resumen[cuenta] = {
+            'estado': info_alerta['estado'],
+            'dias_restantes': info_alerta['dias_restantes'],
+            'fecha_vencimiento': consumo.fecha_maxima_pago,
+            'tiene_alerta': info_alerta['dias_habiles'] > 0,
+            'dias_habiles': info_alerta['dias_habiles']
+        }
+    
+    return resumen
+
 
 
 
