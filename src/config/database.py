@@ -7,6 +7,7 @@ from models.cuenta import Cuenta
 from models.cliente import Cliente
 from models.consumo import Consumo
 from models.orden_pago import OrdenPago
+from models.alerta import Alerta
 from config.security import encriptar_contrasena, codificar_para_almacenamiento
 
 # Crear el engine de SQLAlchemy
@@ -901,6 +902,126 @@ def eliminar_orden_pago(orden_id: int) -> tuple[bool, str]:
     finally:
         db.close()
 
+
+# =====================================================================
+# CRUD Alertas
+# =====================================================================
+
+def listar_alertas(cuenta: int = None):
+    """Lista todas las alertas o filtra por cuenta.
+    
+    Args:
+        cuenta: Número de cuenta para filtrar (None = todas)
+    """
+    db = SessionLocal()
+    try:
+        q = db.query(Alerta)
+        if cuenta is not None:
+            q = q.filter(Alerta.cuenta == cuenta)
+        q = q.order_by(Alerta.id)
+        return q.all()
+    finally:
+        db.close()
+
+
+def obtener_alerta_por_id(alerta_id: int) -> Alerta | None:
+    """Obtiene una alerta por su ID."""
+    db = SessionLocal()
+    try:
+        return db.query(Alerta).filter(Alerta.id == alerta_id).first()
+    finally:
+        db.close()
+
+
+def crear_alerta(cuenta: int, dias_habiles: int) -> tuple[bool, str]:
+    """Crea una nueva alerta asociada a una cuenta.
+    
+    Args:
+        cuenta: Número de cuenta
+        dias_habiles: Días hábiles para la alerta
+    """
+    db = SessionLocal()
+    try:
+        # Verificar que la cuenta existe
+        cuenta_obj = db.query(Cuenta).filter(Cuenta.numero_cuenta == cuenta).first()
+        if not cuenta_obj:
+            return False, f"La cuenta {cuenta} no existe."
+        
+        # Verificar si ya existe una alerta para esta cuenta
+        alerta_existente = db.query(Alerta).filter(Alerta.cuenta == cuenta).first()
+        if alerta_existente:
+            return False, f"Ya existe una alerta para la cuenta {cuenta}."
+        
+        nueva_alerta = Alerta(
+            cuenta=cuenta,
+            dias_habiles=dias_habiles
+        )
+        db.add(nueva_alerta)
+        db.commit()
+        return True, "Alerta creada exitosamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al crear alerta: {e}"
+    finally:
+        db.close()
+
+
+def actualizar_alerta(
+    alerta_id: int,
+    cuenta: int = None,
+    dias_habiles: int = None
+) -> tuple[bool, str]:
+    """Actualiza campos de una alerta existente."""
+    db = SessionLocal()
+    try:
+        alerta = db.query(Alerta).filter(Alerta.id == alerta_id).first()
+        if not alerta:
+            return False, "Alerta no encontrada."
+        
+        if cuenta is not None:
+            # Verificar que la cuenta existe
+            cuenta_obj = db.query(Cuenta).filter(Cuenta.numero_cuenta == cuenta).first()
+            if not cuenta_obj:
+                return False, f"La cuenta {cuenta} no existe."
+            
+            # Verificar que no exista otra alerta con esa cuenta
+            alerta_existente = db.query(Alerta).filter(
+                Alerta.cuenta == cuenta,
+                Alerta.id != alerta_id
+            ).first()
+            if alerta_existente:
+                return False, f"Ya existe una alerta para la cuenta {cuenta}."
+            
+            alerta.cuenta = cuenta
+        
+        if dias_habiles is not None:
+            alerta.dias_habiles = dias_habiles
+        
+        db.commit()
+        return True, "Alerta actualizada exitosamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al actualizar alerta: {e}"
+    finally:
+        db.close()
+
+
+def eliminar_alerta(alerta_id: int) -> tuple[bool, str]:
+    """Elimina una alerta por su ID."""
+    db = SessionLocal()
+    try:
+        alerta = db.query(Alerta).filter(Alerta.id == alerta_id).first()
+        if not alerta:
+            return False, "Alerta no encontrada."
+        
+        db.delete(alerta)
+        db.commit()
+        return True, "Alerta eliminada exitosamente."
+    except Exception as e:
+        db.rollback()
+        return False, f"Error al eliminar alerta: {e}"
+    finally:
+        db.close()
 
 
 
