@@ -41,7 +41,7 @@ class WidgetResumenAlertas(QWidget):
         layout.addLayout(titulo_layout)
         
         # Subtítulo
-        subtitulo = QLabel("Último consumo registrado de cada cuenta")
+        subtitulo = QLabel("Cuentas dentro del rango de días configurado para alertas")
         subtitulo.setStyleSheet("color: gray; font-style: italic; font-size: 10px;")
         layout.addWidget(subtitulo)
         
@@ -68,27 +68,22 @@ class WidgetResumenAlertas(QWidget):
     
     def refrescar(self):
         """Refresca los datos de alertas."""
-        # Obtener alertas de últimos consumos
-        alertas = obtener_alertas_ultimos_consumos(solo_alertas=False)
+        # Obtener SOLO alertas dentro del rango configurado (solo_alertas=True)
+        alertas_criticas = obtener_alertas_ultimos_consumos(solo_alertas=True)
         
         # Calcular resumen
-        vencidos = sum(1 for _, info in alertas if info['estado'] == 'vencido')
-        urgentes = sum(1 for _, info in alertas if info['estado'] == 'urgente')
-        proximos = sum(1 for _, info in alertas if info['estado'] == 'proximo')
-        ok = sum(1 for _, info in alertas if info['estado'] == 'ok')
+        vencidos = sum(1 for _, info in alertas_criticas if info['estado'] == 'vencido')
+        urgentes = sum(1 for _, info in alertas_criticas if info['estado'] == 'urgente')
+        proximos = sum(1 for _, info in alertas_criticas if info['estado'] == 'proximo')
         
         # Actualizar resumen
-        resumen_html = f"<b>Total: {len(alertas)} cuentas</b> | "
-        resumen_html += f"<span style='color: red;'>🔴 {vencidos}</span> | "
-        resumen_html += f"<span style='color: orange;'>🟠 {urgentes}</span> | "
-        resumen_html += f"<span style='color: #DAA520;'>🟡 {proximos}</span> | "
-        resumen_html += f"<span style='color: green;'>🟢 {ok}</span>"
+        resumen_html = f"<b>Alertas Activas: {len(alertas_criticas)}</b> | "
+        resumen_html += f"<span style='color: red;'>🔴 {vencidos} vencidos</span> | "
+        resumen_html += f"<span style='color: orange;'>🟠 {urgentes} hoy</span> | "
+        resumen_html += f"<span style='color: #DAA520;'>🟡 {proximos} próximos</span>"
         self.lbl_resumen.setText(resumen_html)
         
-        # Llenar tabla (solo mostrar las que tienen alerta)
-        alertas_criticas = [(c, info) for c, info in alertas 
-                           if info['estado'] in ['vencido', 'urgente', 'proximo']]
-        
+        # Llenar tabla con todas las alertas críticas (ya están filtradas)
         self.tabla.setRowCount(len(alertas_criticas))
         
         for i, (consumo, info_alerta) in enumerate(alertas_criticas):
@@ -142,7 +137,7 @@ class WidgetResumenAlertas(QWidget):
         # Si no hay alertas críticas, mostrar mensaje
         if len(alertas_criticas) == 0:
             self.tabla.setRowCount(1)
-            msg_item = QTableWidgetItem("✓ No hay alertas críticas. Todas las cuentas están al día.")
+            msg_item = QTableWidgetItem("✓ No hay cuentas dentro del rango de alerta configurado.")
             msg_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.tabla.setSpan(0, 0, 1, 5)
             self.tabla.setItem(0, 0, msg_item)

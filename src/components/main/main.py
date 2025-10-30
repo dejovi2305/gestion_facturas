@@ -9,6 +9,7 @@ from components.clientes.clientes import ClientesWidget
 from components.usuarios.usuarios import UsuariosWidget
 from components.consumos.consumos import ConsumosWidget
 from components.ordenes_pago.ordenes_pago import OrdenesPagoWidget
+from components.reportes.reportes import ReportesWidget
 from components.alertas.alertas import AlertasWidget
 from components.alertas.dialogo_vencimientos import mostrar_alertas_si_existen
 
@@ -104,6 +105,10 @@ class MainWindow(QMainWindow):
         self.page_ordenes_pago = OrdenesPagoWidget()
         self.stackedPages.addWidget(self.page_ordenes_pago)
 
+        # Agregar página de reportes
+        self.page_reportes = ReportesWidget()
+        self.stackedPages.addWidget(self.page_reportes)
+
         # Agregar página de alertas
         self.page_alertas = AlertasWidget()
         self.stackedPages.addWidget(self.page_alertas)
@@ -132,7 +137,8 @@ class MainWindow(QMainWindow):
             'btn_usuarios': 4,        # Índice de la página de usuarios
             'btn_consumos': 5,        # Índice de la página de consumos
             'btn_ordenes_pago': 6,    # Índice de la página de órdenes de pago
-            'btn_alertas': 7,         # Índice de la página de alertas
+            'btn_reportes': 7,        # Índice de la página de reportes
+            'btn_alertas': 8,         # Índice de la página de alertas
         }
         
         button_name = button.objectName()

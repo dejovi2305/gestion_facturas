@@ -9,8 +9,9 @@ from PyQt6.QtCore import Qt, QRegularExpression
 from PyQt6.QtGui import QRegularExpressionValidator, QColor, QBrush
 from config.database import (
     listar_cuentas, crear_cuenta, actualizar_cuenta, eliminar_cuenta,
-    obtener_ultimo_consumo_por_cuenta, calcular_estado_alerta_consumo
+    obtener_ultimo_consumo_por_cuenta, calcular_estado_alerta_consumo, SessionLocal
 )
+from models import Alerta
 
 
 class CuentaDialog(QDialog):
@@ -100,6 +101,15 @@ class CuentasWidget(QWidget):
         activo_flag = False if self.chk_mostrar_inactivas.isChecked() else True
         cuentas = listar_cuentas(activo=activo_flag)
 
+        # Obtener TODAS las alertas configuradas de una vez (optimización)
+        db = SessionLocal()
+        try:
+            alertas_dict = {}
+            for alerta in db.query(Alerta).all():
+                alertas_dict[alerta.cuenta] = alerta.dias_habiles
+        finally:
+            db.close()
+
         # Evitar parpadeos/redimensionado durante la actualización
         self.tbl.setUpdatesEnabled(False)
         try:
@@ -109,7 +119,9 @@ class CuentasWidget(QWidget):
                 ultimo_consumo = obtener_ultimo_consumo_por_cuenta(c.numero_cuenta)
                 
                 if ultimo_consumo:
-                    info_alerta = calcular_estado_alerta_consumo(ultimo_consumo)
+                    # Obtener días hábiles configurados para esta cuenta
+                    dias_habiles = alertas_dict.get(c.numero_cuenta, 0)
+                    info_alerta = calcular_estado_alerta_consumo(ultimo_consumo, dias_habiles)
                     estado = info_alerta['estado']
                     dias_restantes = info_alerta['dias_restantes']
                     

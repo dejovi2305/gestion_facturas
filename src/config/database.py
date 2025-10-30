@@ -1048,11 +1048,12 @@ def obtener_ultimo_consumo_por_cuenta(cuenta: int):
         db.close()
 
 
-def calcular_estado_alerta_consumo(consumo, fecha_actual=None):
+def calcular_estado_alerta_consumo(consumo, dias_habiles=0, fecha_actual=None):
     """Calcula el estado de alerta de un consumo basado en su fecha de vencimiento.
     
     Args:
         consumo: Objeto Consumo con fecha_maxima_pago y cuenta
+        dias_habiles: Días hábiles configurados para alertar antes del vencimiento
         fecha_actual: Fecha de referencia (default: hoy)
     
     Returns:
@@ -1060,9 +1061,10 @@ def calcular_estado_alerta_consumo(consumo, fecha_actual=None):
             - estado: 'vencido', 'urgente', 'proximo', 'ok'
             - dias_restantes: días hasta vencimiento (negativo si vencido)
             - fecha_alerta: fecha en que se debe alertar según días hábiles configurados
-            - dias_habiles: días hábiles configurados para la cuenta (0 si no hay alerta)
+            - dias_habiles: días hábiles configurados para la cuenta
+            - debe_mostrar_alerta: True si está dentro del rango de alerta
     """
-    from datetime import date
+    from datetime import date, timedelta
     
     if fecha_actual is None:
         fecha_actual = date.today()
@@ -1070,34 +1072,30 @@ def calcular_estado_alerta_consumo(consumo, fecha_actual=None):
     # Calcular días restantes hasta vencimiento
     dias_restantes = (consumo.fecha_maxima_pago - fecha_actual).days
     
-    # Obtener configuración de alerta para la cuenta
-    db = SessionLocal()
-    try:
-        alerta = db.query(Alerta).filter(Alerta.cuenta == consumo.cuenta).first()
-        dias_habiles = alerta.dias_habiles if alerta else 0
-    finally:
-        db.close()
-    
     # Calcular fecha de alerta (fecha_vencimiento - dias_habiles)
-    from datetime import timedelta
     fecha_alerta = consumo.fecha_maxima_pago - timedelta(days=dias_habiles)
     
     # Determinar estado según días restantes
     if dias_restantes < 0:
         estado = 'vencido'
+        debe_mostrar_alerta = True  # Siempre mostrar vencidos
     elif dias_restantes == 0:
         estado = 'urgente'
+        debe_mostrar_alerta = True  # Siempre mostrar urgentes
     elif fecha_actual >= fecha_alerta:
-        # Ya pasamos la fecha de alerta
+        # Ya pasamos la fecha de alerta (estamos dentro del rango configurado)
         estado = 'proximo'
+        debe_mostrar_alerta = True
     else:
         estado = 'ok'
+        debe_mostrar_alerta = False  # Fuera del rango de alerta
     
     return {
         'estado': estado,
         'dias_restantes': dias_restantes,
         'fecha_alerta': fecha_alerta,
-        'dias_habiles': dias_habiles
+        'dias_habiles': dias_habiles,
+        'debe_mostrar_alerta': debe_mostrar_alerta
     }
 
 
@@ -1109,7 +1107,7 @@ def obtener_alertas_ultimos_consumos(cuenta: int = None, solo_alertas: bool = Fa
     
     Args:
         cuenta: Filtrar por cuenta específica (None = todas las cuentas)
-        solo_alertas: Si True, solo retorna cuentas con estado vencido, urgente o próximo
+        solo_alertas: Si True, solo retorna cuentas dentro del rango de alerta configurado
     
     Returns:
         Lista de tuplas (consumo_ultimo, info_alerta) donde consumo_ultimo es el más reciente
@@ -1124,6 +1122,11 @@ def obtener_alertas_ultimos_consumos(cuenta: int = None, solo_alertas: bool = Fa
         else:
             cuentas = db.query(Cuenta).filter(Cuenta.activo == True).all()
         
+        # Obtener TODAS las alertas configuradas de una vez (optimización)
+        alertas_dict = {}
+        for alerta in db.query(Alerta).all():
+            alertas_dict[alerta.cuenta] = alerta.dias_habiles
+        
         resultado = []
         
         for c in cuentas:
@@ -1131,11 +1134,15 @@ def obtener_alertas_ultimos_consumos(cuenta: int = None, solo_alertas: bool = Fa
             ultimo_consumo = obtener_ultimo_consumo_por_cuenta(c.numero_cuenta)
             
             if ultimo_consumo:
+                # Obtener días hábiles configurados para esta cuenta
+                dias_habiles = alertas_dict.get(c.numero_cuenta, 0)
+                
                 # Calcular estado de alerta del último consumo
-                info_alerta = calcular_estado_alerta_consumo(ultimo_consumo)
+                info_alerta = calcular_estado_alerta_consumo(ultimo_consumo, dias_habiles)
                 
                 if solo_alertas:
-                    if info_alerta['estado'] in ['vencido', 'urgente', 'proximo']:
+                    # Solo agregar si debe mostrar alerta (dentro del rango configurado)
+                    if info_alerta['debe_mostrar_alerta']:
                         resultado.append((ultimo_consumo, info_alerta))
                 else:
                     resultado.append((ultimo_consumo, info_alerta))
@@ -1160,10 +1167,21 @@ def obtener_consumos_con_alertas(cuenta: int = None, solo_alertas: bool = False)
         Lista de tuplas (consumo, info_alerta)
     """
     consumos = listar_consumos(cuenta=cuenta)
+    
+    # Obtener alertas configuradas
+    db = SessionLocal()
+    try:
+        alertas_dict = {}
+        for alerta in db.query(Alerta).all():
+            alertas_dict[alerta.cuenta] = alerta.dias_habiles
+    finally:
+        db.close()
+    
     resultado = []
     
     for c in consumos:
-        info_alerta = calcular_estado_alerta_consumo(c)
+        dias_habiles = alertas_dict.get(c.cuenta, 0)
+        info_alerta = calcular_estado_alerta_consumo(c, dias_habiles)
         
         if solo_alertas:
             if info_alerta['estado'] in ['vencido', 'urgente', 'proximo']:
@@ -1204,5 +1222,227 @@ def obtener_resumen_alertas_por_cuenta():
     return resumen
 
 
+# ============================================================================
+# FUNCIONES DE REPORTES
+# ============================================================================
+
+def generar_reporte_consumos_por_periodo(fecha_inicio, fecha_fin, cuenta=None):
+    """Genera reporte de consumos en un período de tiempo.
+    
+    Args:
+        fecha_inicio: Fecha de inicio del período
+        fecha_fin: Fecha de fin del período
+        cuenta: Número de cuenta (opcional, None = todas)
+    
+    Returns:
+        Lista de diccionarios con datos de consumos
+    """
+    db = SessionLocal()
+    try:
+        query = db.query(Consumo).filter(
+            Consumo.fecha_maxima_pago >= fecha_inicio,
+            Consumo.fecha_maxima_pago <= fecha_fin
+        )
+        
+        if cuenta is not None:
+            query = query.filter(Consumo.cuenta == cuenta)
+        
+        consumos = query.order_by(Consumo.fecha_maxima_pago.desc()).all()
+        
+        resultado = []
+        for c in consumos:
+            resultado.append({
+                'id': c.id,
+                'cuenta': c.cuenta,
+                'cufe': c.cufe,
+                'consumo_kwh': float(c.consumo_kwh),
+                'valor_kwh': float(c.valor_kwh),
+                'fecha_maxima_pago': c.fecha_maxima_pago.strftime('%Y-%m-%d'),
+                'numero_orden': c.numero_orden,
+                'valor_total_pagar': float(c.Valor_total_pagar)
+            })
+        
+        return resultado
+    finally:
+        db.close()
+
+
+def generar_reporte_consumos_por_cuenta(cuenta):
+    """Genera reporte de todos los consumos de una cuenta específica.
+    
+    Args:
+        cuenta: Número de cuenta
+    
+    Returns:
+        Lista de diccionarios con datos de consumos
+    """
+    db = SessionLocal()
+    try:
+        consumos = db.query(Consumo).filter(
+            Consumo.cuenta == cuenta
+        ).order_by(Consumo.fecha_maxima_pago.desc()).all()
+        
+        resultado = []
+        for c in consumos:
+            resultado.append({
+                'id': c.id,
+                'cuenta': c.cuenta,
+                'cufe': c.cufe,
+                'consumo_kwh': float(c.consumo_kwh),
+                'valor_kwh': float(c.valor_kwh),
+                'fecha_maxima_pago': c.fecha_maxima_pago.strftime('%Y-%m-%d'),
+                'numero_orden': c.numero_orden,
+                'valor_total_pagar': float(c.Valor_total_pagar)
+            })
+        
+        return resultado
+    finally:
+        db.close()
+
+
+def generar_reporte_consumos_por_orden(numero_orden):
+    """Genera reporte de consumos asociados a una orden de pago.
+    
+    Args:
+        numero_orden: Número de orden de pago
+    
+    Returns:
+        Lista de diccionarios con datos de consumos
+    """
+    db = SessionLocal()
+    try:
+        consumos = db.query(Consumo).filter(
+            Consumo.numero_orden == numero_orden
+        ).order_by(Consumo.cuenta).all()
+        
+        resultado = []
+        for c in consumos:
+            resultado.append({
+                'id': c.id,
+                'cuenta': c.cuenta,
+                'cufe': c.cufe,
+                'consumo_kwh': float(c.consumo_kwh),
+                'valor_kwh': float(c.valor_kwh),
+                'fecha_maxima_pago': c.fecha_maxima_pago.strftime('%Y-%m-%d'),
+                'numero_orden': c.numero_orden,
+                'valor_total_pagar': float(c.Valor_total_pagar)
+            })
+        
+        return resultado
+    finally:
+        db.close()
+
+
+def generar_reporte_resumen_cuentas():
+    """Genera reporte resumen de todas las cuentas con su último consumo.
+    
+    Returns:
+        Lista de diccionarios con datos de cuentas
+    """
+    db = SessionLocal()
+    try:
+        cuentas = db.query(Cuenta).filter(Cuenta.activo == True).all()
+        
+        resultado = []
+        for cuenta in cuentas:
+            ultimo_consumo = obtener_ultimo_consumo_por_cuenta(cuenta.numero_cuenta)
+            
+            if ultimo_consumo:
+                resultado.append({
+                    'id_cuenta': cuenta.id,
+                    'numero_cuenta': cuenta.numero_cuenta,
+                    'activa': 'Sí' if cuenta.activo else 'No',
+                    'ultimo_cufe': ultimo_consumo.cufe,
+                    'ultimo_consumo_kwh': float(ultimo_consumo.consumo_kwh),
+                    'ultima_fecha_pago': ultimo_consumo.fecha_maxima_pago.strftime('%Y-%m-%d'),
+                    'ultimo_valor_pagar': float(ultimo_consumo.Valor_total_pagar)
+                })
+            else:
+                resultado.append({
+                    'id_cuenta': cuenta.id,
+                    'numero_cuenta': cuenta.numero_cuenta,
+                    'activa': 'Sí' if cuenta.activo else 'No',
+                    'ultimo_cufe': 'Sin consumos',
+                    'ultimo_consumo_kwh': 0.0,
+                    'ultima_fecha_pago': 'N/A',
+                    'ultimo_valor_pagar': 0.0
+                })
+        
+        return resultado
+    finally:
+        db.close()
+
+
+def generar_reporte_clientes():
+    """Genera reporte de todos los clientes.
+    
+    Returns:
+        Lista de diccionarios con datos de clientes
+    """
+    db = SessionLocal()
+    try:
+        clientes = db.query(Cliente).order_by(Cliente.nombre).all()
+        
+        resultado = []
+        for cliente in clientes:
+            resultado.append({
+                'id': cliente.id,
+                'nombre': cliente.nombre,
+                'email': cliente.email,
+                'telefono': cliente.telefono
+            })
+        
+        return resultado
+    finally:
+        db.close()
+
+
+def generar_reporte_ordenes_pago(fecha_inicio=None, fecha_fin=None):
+    """Genera reporte de órdenes de pago.
+    
+    Args:
+        fecha_inicio: Fecha de inicio (opcional)
+        fecha_fin: Fecha de fin (opcional)
+    
+    Returns:
+        Lista de diccionarios con datos de órdenes de pago
+    """
+    db = SessionLocal()
+    try:
+        query = db.query(OrdenPago)
+        
+        # Excluir orden semilla
+        query = query.filter(OrdenPago.id != 1)
+        
+        if fecha_inicio and fecha_fin:
+            # Si se proporcionan fechas, filtrar por ellas
+            # Nota: OrdenPago no tiene campo de fecha, por ahora solo listamos todas
+            pass
+        
+        ordenes = query.order_by(OrdenPago.numero_orden.desc()).all()
+        
+        resultado = []
+        for orden in ordenes:
+            # Contar consumos asociados
+            num_consumos = db.query(Consumo).filter(
+                Consumo.numero_orden == orden.numero_orden
+            ).count()
+            
+            # Calcular total
+            consumos = db.query(Consumo).filter(
+                Consumo.numero_orden == orden.numero_orden
+            ).all()
+            total = sum(float(c.Valor_total_pagar) for c in consumos)
+            
+            resultado.append({
+                'id': orden.id,
+                'numero_orden': orden.numero_orden,
+                'num_consumos': num_consumos,
+                'total': total
+            })
+        
+        return resultado
+    finally:
+        db.close()
 
 
