@@ -172,10 +172,10 @@ class MainWindow(QMainWindow):
             if not avatar_path:
                 if getattr(sys, 'frozen', False):
                     base = sys._MEIPASS
-                    avatar_path = os.path.join(base, 'src', 'assets', 'icon.ico')
+                    avatar_path = os.path.join(base, 'src', 'assets', 'profile.png')
                 else:
                     src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-                    avatar_path = os.path.join(src_dir, 'assets', 'icon.ico')
+                    avatar_path = os.path.join(src_dir, 'assets', 'profile.png')
 
             if hasattr(self, 'avatar') and os.path.exists(avatar_path):
                 pix = QPixmap(avatar_path)
