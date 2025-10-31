@@ -11,6 +11,7 @@ from components.consumos.consumos import ConsumosWidget
 from components.ordenes_pago.ordenes_pago import OrdenesPagoWidget
 from components.reportes.reportes import ReportesWidget
 from components.alertas.alertas import AlertasWidget
+from components.backups.backups import BackupsWidget
 from components.alertas.dialogo_vencimientos import mostrar_alertas_si_existen
 
 class MainWindow(QMainWindow):
@@ -41,7 +42,7 @@ class MainWindow(QMainWindow):
             for name in [
                 'btn_cargar_factura', 'btn_usuarios',
                 'btn_cuentas', 'btn_clientes', 'btn_consumos',
-                'btn_ordenes_pago', 'btn_reportes', 'btn_alertas'
+                'btn_ordenes_pago', 'btn_reportes', 'btn_alertas', 'btn_backups'
             ]
             if hasattr(self, name)
         ]
@@ -113,6 +114,10 @@ class MainWindow(QMainWindow):
         self.page_alertas = AlertasWidget()
         self.stackedPages.addWidget(self.page_alertas)
 
+        # Agregar página de backups
+        self.page_backups = BackupsWidget()
+        self.stackedPages.addWidget(self.page_backups)
+
     def _on_menu_clicked(self):
         sender = self.sender()
         if isinstance(sender, QPushButton):
@@ -139,6 +144,7 @@ class MainWindow(QMainWindow):
             'btn_ordenes_pago': 6,    # Índice de la página de órdenes de pago
             'btn_reportes': 7,        # Índice de la página de reportes
             'btn_alertas': 8,         # Índice de la página de alertas
+            'btn_backups': 9,         # Índice de la página de backups
         }
         
         button_name = button.objectName()
