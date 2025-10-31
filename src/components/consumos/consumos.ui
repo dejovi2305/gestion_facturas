@@ -60,46 +60,51 @@
        <verstretch>1</verstretch>
       </sizepolicy>
      </property>
-     <column>
-      <property name="text">
-       <string>ID</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Cuenta</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>CUFE</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Consumo kWh</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Valor kWh</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Fecha Max. Pago</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Núm. Orden</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Total a Pagar</string>
-      </property>
-     </column>
+    <column>
+     <property name="text">
+      <string>ID</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>Cuenta</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>Consumo kWh</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>Valor kWh</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>Fecha Max. Pago</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>Mes Pago</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>Núm. Orden</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>Total a Pagar</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>Pago Realizado</string>
+     </property>
+    </column>
     </widget>
    </item>
    <item>

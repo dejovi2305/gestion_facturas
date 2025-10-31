@@ -3,13 +3,14 @@ from PyQt6.uic import loadUi
 from PyQt6.QtWidgets import (
     QWidget, QTableWidget, QTableWidgetItem,
     QPushButton, QComboBox, QDialog, QFormLayout, QDialogButtonBox,
-    QLineEdit, QMessageBox, QHeaderView, QDateEdit
+    QLineEdit, QMessageBox, QHeaderView, QDateEdit, QCheckBox
 )
 from PyQt6.QtCore import Qt, QDate
+from datetime import date
 
 from config.database import (
     listar_consumos, obtener_consumo_por_id, actualizar_consumo, eliminar_consumo,
-    listar_cuentas, listar_ordenes_pago
+    listar_cuentas, listar_ordenes_pago, obtener_nombre_mes
 )
 from decimal import Decimal
 
@@ -18,25 +19,12 @@ class ConsumoDialog(QDialog):
     def __init__(self, parent=None, *, titulo="Consumo", consumo_data: dict | None = None):
         super().__init__(parent)
         self.setWindowTitle(titulo)
-        self.setMinimumWidth(450)
+        self.setMinimumWidth(600)
         form = QFormLayout(self)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         self.es_edicion = consumo_data is not None
-
-        # CUFE
-        if self.es_edicion:
-            # Edición: CUFE solo lectura
-            self.ed_cufe = QLineEdit(self)
-            self.ed_cufe.setReadOnly(True)
-            self.ed_cufe.setText(consumo_data.get("cufe", ""))
-            form.addRow("CUFE:", self.ed_cufe)
-        else:
-            # Creación: CUFE editable
-            self.ed_cufe = QLineEdit(self)
-            self.ed_cufe.setPlaceholderText("CUFE/UUID único de la factura")
-            form.addRow("CUFE:", self.ed_cufe)
 
         # Cuenta
         if self.es_edicion:
@@ -87,6 +75,27 @@ class ConsumoDialog(QDialog):
                 self.date_max_pago.setDate(QDate.currentDate())
         else:
             self.date_max_pago.setDate(QDate.currentDate())
+        
+        # Mes de pago (read-only, calculado desde la fecha)
+        self.ed_mes_pago = QLineEdit(self)
+        self.ed_mes_pago.setReadOnly(True)
+        # Inicializar mes según la fecha actual/seleccionada
+        qd_init = self.date_max_pago.date()
+        try:
+            init_py_date = date(qd_init.year(), qd_init.month(), qd_init.day())
+            self.ed_mes_pago.setText(obtener_nombre_mes(init_py_date))
+        except Exception:
+            self.ed_mes_pago.setText("")
+        
+        # Actualizar mes cuando el usuario cambie la fecha
+        def _on_fecha_changed(qdate):
+            try:
+                py_date = date(qdate.year(), qdate.month(), qdate.day())
+                self.ed_mes_pago.setText(obtener_nombre_mes(py_date))
+            except Exception:
+                self.ed_mes_pago.setText("")
+        
+        self.date_max_pago.dateChanged.connect(_on_fecha_changed)
 
         # Valor total
         self.ed_valor_total = QLineEdit(self)
@@ -117,15 +126,37 @@ class ConsumoDialog(QDialog):
             index = self.combo_orden_pago.findData(consumo_data["orden_pago_id"])
             if index >= 0:
                 self.combo_orden_pago.setCurrentIndex(index)
+        
+        # Pago realizado (checkbox)
+        self.chk_pago_realizado = QCheckBox("Pago realizado", self)
+        if consumo_data and consumo_data.get("pago_realizado"):
+            self.chk_pago_realizado.setChecked(bool(consumo_data["pago_realizado"]))
+        else:
+            self.chk_pago_realizado.setChecked(False)
+        
+         # CUFE
+        if self.es_edicion:
+            # Edición: CUFE solo lectura
+            self.ed_cufe = QLineEdit(self)
+            self.ed_cufe.setReadOnly(True)
+            self.ed_cufe.setText(consumo_data.get("cufe", ""))
+            form.addRow("CUFE:", self.ed_cufe)
+        else:
+            # Creación: CUFE editable
+            self.ed_cufe = QLineEdit(self)
+            self.ed_cufe.setPlaceholderText("CUFE/UUID único de la factura")
+            form.addRow("CUFE:", self.ed_cufe)
 
         form.addRow("Consumo kWh:", self.ed_consumo_kwh)
         form.addRow("Valor kWh:", self.ed_valor_kwh)
         form.addRow("Valor kWh Sub.:", self.ed_valor_kwh_sub)
         form.addRow("Fecha Máx. Pago:", self.date_max_pago)
+        form.addRow("Mes Pago:", self.ed_mes_pago)
         form.addRow("Valor Total:", self.ed_valor_total)
         form.addRow("Total a Pagar:", self.ed_total_pagar)
         form.addRow("Intereses Mora:", self.ed_intereses)
         form.addRow("Orden de Pago:", self.combo_orden_pago)
+        form.addRow("Estado:", self.chk_pago_realizado)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel,
@@ -188,10 +219,12 @@ class ConsumoDialog(QDialog):
             "valor_kwh": float(self.ed_valor_kwh.text().strip()),
             "valor_kwh_subsidiado": float(self.ed_valor_kwh_sub.text().strip()),
             "fecha_maxima_pago": self.date_max_pago.date().toString("yyyy-MM-dd"),
+            "mes_pago": self.ed_mes_pago.text().strip(),
             "valor_total": float(self.ed_valor_total.text().strip()),
             "valor_total_pagar": float(self.ed_total_pagar.text().strip()),
             "intereses_mora": float(self.ed_intereses.text().strip()),
             "orden_pago_id": self.combo_orden_pago.currentData(),
+            "pago_realizado": self.chk_pago_realizado.isChecked(),
         }
         
         # Agregar cuenta solo en modo creación
@@ -226,10 +259,10 @@ class ConsumosWidget(QWidget):
 
         # Configurar tabla
         self.tbl: QTableWidget = self.tbl_consumos
-        self.tbl.setColumnCount(8)
+        self.tbl.setColumnCount(9)
         self.tbl.setHorizontalHeaderLabels([
-            "ID", "Cuenta", "CUFE", "Consumo kWh", "Valor kWh", 
-            "Fecha Max. Pago", "Orden Pago", "Total a Pagar"
+            "ID", "Cuenta", "Consumo kWh", "Valor kWh", 
+            "Fecha Max. Pago", "Mes Pago", "Orden Pago", "Total a Pagar", "Pago Realizado"
         ])
         self.tbl.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tbl.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -241,7 +274,6 @@ class ConsumosWidget(QWidget):
         # Establecer anchos iniciales
         self.tbl.setColumnWidth(0, 50)   # ID
         self.tbl.setColumnWidth(1, 100)  # Cuenta
-        self.tbl.setColumnWidth(2, 200)  # CUFE
         self.tbl.setColumnWidth(3, 100)  # Consumo kWh
         self.tbl.setColumnWidth(4, 100)  # Valor kWh
         self.tbl.setColumnWidth(5, 120)  # Fecha
@@ -285,9 +317,6 @@ class ConsumosWidget(QWidget):
                 cuenta_item = QTableWidgetItem(str(c.cuenta))
                 cuenta_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 
-                cufe_item = QTableWidgetItem(c.cufe[:20] + "..." if len(c.cufe) > 20 else c.cufe)
-                cufe_item.setToolTip(c.cufe)
-                
                 consumo_item = QTableWidgetItem(str(c.consumo_kwh))
                 consumo_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 
@@ -297,6 +326,9 @@ class ConsumosWidget(QWidget):
                 fecha_item = QTableWidgetItem(c.fecha_maxima_pago.strftime("%Y-%m-%d"))
                 fecha_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 
+                mes_item = QTableWidgetItem(c.mes_pago if c.mes_pago else "")
+                mes_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                
                 orden_texto = f"#{c.orden_pago_rel.numero_orden}" if c.orden_pago_rel else "N/A"
                 orden_item = QTableWidgetItem(orden_texto)
                 orden_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -304,14 +336,19 @@ class ConsumosWidget(QWidget):
                 pagar_item = QTableWidgetItem(f"${float(c.Valor_total_pagar):.2f}")
                 pagar_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 
+                pago_texto = "Sí" if c.pago_realizado else "No"
+                pago_item = QTableWidgetItem(pago_texto)
+                pago_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                
                 self.tbl.setItem(i, 0, id_item)
                 self.tbl.setItem(i, 1, cuenta_item)
-                self.tbl.setItem(i, 2, cufe_item)
-                self.tbl.setItem(i, 3, consumo_item)
-                self.tbl.setItem(i, 4, valor_kwh_item)
-                self.tbl.setItem(i, 5, fecha_item)
+                self.tbl.setItem(i, 2, consumo_item)
+                self.tbl.setItem(i, 3, valor_kwh_item)
+                self.tbl.setItem(i, 4, fecha_item)
+                self.tbl.setItem(i, 5, mes_item)
                 self.tbl.setItem(i, 6, orden_item)
                 self.tbl.setItem(i, 7, pagar_item)
+                self.tbl.setItem(i, 8, pago_item)
         finally:
             self.tbl.setUpdatesEnabled(True)
 
@@ -343,7 +380,8 @@ class ConsumosWidget(QWidget):
                 valor_total=vals["valor_total"],
                 valor_total_pagar=vals["valor_total_pagar"],
                 intereses_mora=vals["intereses_mora"],
-                orden_pago_id=vals["orden_pago_id"]
+                orden_pago_id=vals["orden_pago_id"],
+                pago_realizado=vals.get("pago_realizado", False),
             )
             
             if ok:
@@ -375,6 +413,7 @@ class ConsumosWidget(QWidget):
             "valor_total_pagar": float(consumo.Valor_total_pagar),
             "intereses_mora": float(consumo.intereses_mora),
             "orden_pago_id": consumo.orden_pago_id,
+            "pago_realizado": bool(consumo.pago_realizado),
         }
         
         dlg = ConsumoDialog(self, titulo="Editar consumo", consumo_data=consumo_data)
@@ -389,7 +428,8 @@ class ConsumosWidget(QWidget):
                 valor_total=vals["valor_total"],
                 valor_total_pagar=vals["valor_total_pagar"],
                 intereses_mora=vals["intereses_mora"],
-                orden_pago_id=vals["orden_pago_id"]
+                orden_pago_id=vals["orden_pago_id"],
+                pago_realizado=vals.get("pago_realizado", False)
             )
             if ok:
                 QMessageBox.information(self, "Editar consumo", msg)

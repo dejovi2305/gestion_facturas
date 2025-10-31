@@ -26,9 +26,11 @@ class Consumo(Base):
     valor_kwh = Column(Numeric(18, 6), nullable=False, default=0)
     valor_kwh_subsidiado = Column(Numeric(18, 6), nullable=False, default=0)
     fecha_maxima_pago = Column(Date, nullable=False)
+    mes_pago = Column(String(20), nullable=False, default="")  # Mes en español extraído de fecha_maxima_pago
     valor_total = Column(Numeric(18, 2), nullable=False, default=0)
     Valor_total_pagar = Column(Numeric(18, 2), nullable=False, default=0)
     intereses_mora = Column(Numeric(18, 2), nullable=False, default=0)
+    pago_realizado = Column(Integer, nullable=False, default=0)  # 0=False, 1=True (SQLite compatibility)
 
     # Relaciones de navegación
     cuenta_rel = relationship(

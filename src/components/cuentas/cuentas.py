@@ -120,33 +120,39 @@ class CuentasWidget(QWidget):
                 ultimo_consumo = obtener_ultimo_consumo_por_cuenta(c.numero_cuenta)
                 
                 if ultimo_consumo:
-                    # Obtener días hábiles configurados para esta cuenta
-                    dias_habiles = alertas_dict.get(c.numero_cuenta, 0)
-                    info_alerta = calcular_estado_alerta_consumo(ultimo_consumo, dias_habiles)
-                    estado = info_alerta['estado']
-                    dias_restantes = info_alerta['dias_restantes']
-                    
-                    # Determinar color y texto del semáforo
-                    if estado == 'vencido':
-                        estado_texto = "🔴 VENCIDO"
-                        color_fondo = QColor(255, 200, 200)
-                    elif estado == 'urgente':
-                        estado_texto = "🟠 HOY"
-                        color_fondo = QColor(255, 220, 150)
-                    elif estado == 'proximo':
-                        estado_texto = "🟡 PRÓXIMO"
-                        color_fondo = QColor(255, 255, 200)
-                    else:
-                        estado_texto = "🟢 OK"
+                    # Si el pago ya fue realizado, mostrar como OK/Pagado
+                    if getattr(ultimo_consumo, 'pago_realizado', 0):
+                        estado_texto = "✅ PAGADO"
                         color_fondo = QColor(200, 255, 200)
-                    
-                    # Texto de días restantes
-                    if dias_restantes < 0:
-                        dias_texto = f"{abs(dias_restantes)} días atrasado"
-                    elif dias_restantes == 0:
-                        dias_texto = "Hoy"
+                        dias_texto = "Pago realizado"
                     else:
-                        dias_texto = f"{dias_restantes} días"
+                        # Obtener días hábiles configurados para esta cuenta
+                        dias_habiles = alertas_dict.get(c.numero_cuenta, 0)
+                        info_alerta = calcular_estado_alerta_consumo(ultimo_consumo, dias_habiles)
+                        estado = info_alerta['estado']
+                        dias_restantes = info_alerta['dias_restantes']
+                        
+                        # Determinar color y texto del semáforo
+                        if estado == 'vencido':
+                            estado_texto = "🔴 VENCIDO"
+                            color_fondo = QColor(255, 200, 200)
+                        elif estado == 'urgente':
+                            estado_texto = "🟠 HOY"
+                            color_fondo = QColor(255, 220, 150)
+                        elif estado == 'proximo':
+                            estado_texto = "🟡 PRÓXIMO"
+                            color_fondo = QColor(255, 255, 200)
+                        else:
+                            estado_texto = "🟢 OK"
+                            color_fondo = QColor(200, 255, 200)
+                        
+                        # Texto de días restantes
+                        if dias_restantes < 0:
+                            dias_texto = f"{abs(dias_restantes)} días atrasado"
+                        elif dias_restantes == 0:
+                            dias_texto = "Hoy"
+                        else:
+                            dias_texto = f"{dias_restantes} días"
                 else:
                     estado_texto = "⚪ Sin consumos"
                     color_fondo = QColor(240, 240, 240)

@@ -230,6 +230,7 @@ class CargarFacturaWidget(QWidget):
                             valor_total_pagar=vals["valor_total_pagar"],
                             intereses_mora=vals["intereses_mora"],
                             orden_pago_id=vals.get("orden_pago_id", 1),  # Default a orden semilla
+                            pago_realizado=vals.get("pago_realizado", False),
                         )
                         if creado_consumo:
                             resultado += f"✓ Consumo registrado (id={id_consumo})\n"

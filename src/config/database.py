@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, joinedload
-from datetime import datetime
+from datetime import datetime, date
 from models import Base
 from models.usuario import Usuario
 from models.cuenta import Cuenta
@@ -381,6 +381,15 @@ def eliminar_cliente(cliente_id: int) -> tuple[bool, str]:
         db.close()
 
 
+def obtener_nombre_mes(fecha: date) -> str:
+    """Convierte una fecha a nombre del mes en español."""
+    meses = [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ]
+    return meses[fecha.month - 1]
+
+
 def guardar_consumo(
     numero_cuenta: int,
     cufe: str | None,
@@ -392,6 +401,7 @@ def guardar_consumo(
     valor_total_pagar: float | None = None,
     intereses_mora: float | None = None,
     orden_pago_id: int | None = None,
+    pago_realizado: bool = False,
 ) -> tuple[bool, str, int | None]:
     """Guarda un registro de Consumo.
 
@@ -449,6 +459,9 @@ def guardar_consumo(
         # Si no se proporciona orden_pago_id, usar la orden semilla (id=1)
         if orden_pago_id is None:
             orden_pago_id = 1
+        
+        # Extraer mes en español de la fecha de pago
+        mes_pago = obtener_nombre_mes(fmp)
 
         consumo = Consumo(
             cuenta=numero_cuenta,
@@ -457,10 +470,12 @@ def guardar_consumo(
             valor_kwh=to_float(valor_kwh, 0.0),
             valor_kwh_subsidiado=to_float(valor_kwh_subsidiado, 0.0),
             fecha_maxima_pago=fmp,
+            mes_pago=mes_pago,
             valor_total=to_float(valor_total, 0.0),
             Valor_total_pagar=to_float(valor_total_pagar, 0.0),
             intereses_mora=to_float(intereses_mora, 0.0),
             orden_pago_id=orden_pago_id,
+            pago_realizado=1 if pago_realizado else 0,
         )
 
         db.add(consumo)
@@ -693,7 +708,8 @@ def actualizar_consumo(
     valor_total: float | None = None,
     valor_total_pagar: float | None = None,
     intereses_mora: float | None = None,
-    orden_pago_id: int | None = None
+    orden_pago_id: int | None = None,
+    pago_realizado: bool | None = None
 ) -> tuple[bool, str]:
     """Actualiza campos de un consumo existente."""
     from datetime import datetime
@@ -712,7 +728,10 @@ def actualizar_consumo(
             c.valor_kwh_subsidiado = float(valor_kwh_subsidiado)
         if fecha_maxima_pago is not None:
             try:
-                c.fecha_maxima_pago = datetime.strptime(fecha_maxima_pago, "%Y-%m-%d").date()
+                nueva_fecha = datetime.strptime(fecha_maxima_pago, "%Y-%m-%d").date()
+                c.fecha_maxima_pago = nueva_fecha
+                # Actualizar mes_pago automáticamente si cambia la fecha
+                c.mes_pago = obtener_nombre_mes(nueva_fecha)
             except Exception:
                 return False, "Formato de fecha inválido. Use YYYY-MM-DD."
         if valor_total is not None:
@@ -723,6 +742,8 @@ def actualizar_consumo(
             c.intereses_mora = float(intereses_mora)
         if orden_pago_id is not None:
             c.orden_pago_id = int(orden_pago_id)
+        if pago_realizado is not None:
+            c.pago_realizado = 1 if pago_realizado else 0
         
         db.commit()
         return True, "Consumo actualizado exitosamente."
@@ -1069,6 +1090,16 @@ def calcular_estado_alerta_consumo(consumo, dias_habiles=0, fecha_actual=None):
     if fecha_actual is None:
         fecha_actual = date.today()
     
+    # NO ALERTAR si el pago ya fue realizado
+    if getattr(consumo, 'pago_realizado', 0):
+        return {
+            'estado': 'ok',
+            'dias_restantes': (consumo.fecha_maxima_pago - fecha_actual).days,
+            'fecha_alerta': consumo.fecha_maxima_pago - timedelta(days=dias_habiles),
+            'dias_habiles': dias_habiles,
+            'debe_mostrar_alerta': False
+        }
+    
     # Calcular días restantes hasta vencimiento
     dias_restantes = (consumo.fecha_maxima_pago - fecha_actual).days
     
@@ -1134,6 +1165,10 @@ def obtener_alertas_ultimos_consumos(cuenta: int = None, solo_alertas: bool = Fa
             ultimo_consumo = obtener_ultimo_consumo_por_cuenta(c.numero_cuenta)
             
             if ultimo_consumo:
+                # Ignorar consumos con pago realizado
+                if getattr(ultimo_consumo, 'pago_realizado', 0):
+                    continue
+                
                 # Obtener días hábiles configurados para esta cuenta
                 dias_habiles = alertas_dict.get(c.numero_cuenta, 0)
                 
@@ -1180,6 +1215,10 @@ def obtener_consumos_con_alertas(cuenta: int = None, solo_alertas: bool = False)
     resultado = []
     
     for c in consumos:
+        # Ignorar consumos con pago realizado
+        if getattr(c, 'pago_realizado', 0):
+            continue
+        
         dias_habiles = alertas_dict.get(c.cuenta, 0)
         info_alerta = calcular_estado_alerta_consumo(c, dias_habiles)
         
