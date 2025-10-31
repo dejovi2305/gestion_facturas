@@ -37,6 +37,49 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="grp_modo">
+     <property name="title">
+      <string>Modo de Carga</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_modo">
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_modo">
+        <item>
+         <widget class="QRadioButton" name="rb_individual">
+          <property name="text">
+           <string>📄 Individual (1 XML)</string>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QRadioButton" name="rb_masivo">
+          <property name="text">
+           <string>📦 Masivo (ZIP o Carpeta)</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QFrame" name="frame_selector">
      <property name="frameShape">
       <enum>QFrame::StyledPanel</enum>
@@ -48,7 +91,7 @@
       <item>
        <widget class="QLabel" name="lbl_archivo">
         <property name="text">
-         <string>Archivo seleccionado:</string>
+         <string>Archivo/Carpeta:</string>
         </property>
        </widget>
       </item>
@@ -79,7 +122,27 @@
 color: white;</string>
         </property>
         <property name="text">
-         <string>Seleccionar archivo</string>
+         <string>Seleccionar</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btn_seleccionar_carpeta">
+        <property name="font">
+         <font>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">background-color: #8B5CF6;
+color: white;</string>
+        </property>
+        <property name="text">
+         <string>📁 Carpeta</string>
+        </property>
+        <property name="visible">
+         <bool>false</bool>
         </property>
        </widget>
       </item>
