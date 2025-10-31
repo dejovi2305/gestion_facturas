@@ -93,9 +93,7 @@ class ReportesWidget(QWidget):
             self.dt_fecha_inicio.setEnabled(False)
             self.dt_fecha_fin.setEnabled(False)
             self.cmb_cuenta.setEnabled(True)
-            # Cambiar a primera cuenta real (no "Todas")
-            if self.cmb_cuenta.count() > 1:
-                self.cmb_cuenta.setCurrentIndex(1)
+            # Permitir seleccionar "Todas las cuentas"
         elif tipo == 2:  # Consumos por Orden
             self.dt_fecha_inicio.setEnabled(False)
             self.dt_fecha_fin.setEnabled(False)
@@ -161,10 +159,7 @@ class ReportesWidget(QWidget):
         """Genera reporte de consumos por cuenta."""
         cuenta = self.cmb_cuenta.currentData()
         
-        if cuenta is None:
-            QMessageBox.warning(self, "Advertencia", "Debe seleccionar una cuenta específica")
-            return
-        
+        # Permitir None para mostrar todas las cuentas
         self.datos_reporte = generar_reporte_consumos_por_cuenta(cuenta)
         self.headers_reporte = [
             'ID', 'Cuenta', 'CUFE', 'Consumo kWh', 'Valor kWh',
@@ -212,7 +207,7 @@ class ReportesWidget(QWidget):
     def _generar_listado_clientes(self):
         """Genera reporte de clientes."""
         self.datos_reporte = generar_reporte_clientes()
-        self.headers_reporte = ['ID', 'Nombre', 'Email', 'Teléfono']
+        self.headers_reporte = ['ID', 'Cuenta', 'Nombre', 'Dirección', 'Estrato', 'Núm. Medidor', 'Activo']
         self._mostrar_en_tabla()
     
     def _generar_ordenes_pago(self):
@@ -273,6 +268,10 @@ class ReportesWidget(QWidget):
             'Nombre': 'nombre',
             'Email': 'email',
             'Teléfono': 'telefono',
+            'Dirección': 'direccion',
+            'Estrato': 'estrato',
+            'Núm. Medidor': 'numero_medidor',
+            'Activo': 'activo',
             'Número Orden': 'numero_orden',
             'Núm. Consumos': 'num_consumos',
             'Total': 'total'

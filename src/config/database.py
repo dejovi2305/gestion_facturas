@@ -1290,6 +1290,9 @@ def generar_reporte_consumos_por_periodo(fecha_inicio, fecha_fin, cuenta=None):
         
         resultado = []
         for c in consumos:
+            # Obtener número de orden desde la relación
+            numero_orden = c.orden_pago_rel.numero_orden if c.orden_pago_rel else 'N/A'
+            
             resultado.append({
                 'id': c.id,
                 'cuenta': c.cuenta,
@@ -1297,7 +1300,7 @@ def generar_reporte_consumos_por_periodo(fecha_inicio, fecha_fin, cuenta=None):
                 'consumo_kwh': float(c.consumo_kwh),
                 'valor_kwh': float(c.valor_kwh),
                 'fecha_maxima_pago': c.fecha_maxima_pago.strftime('%Y-%m-%d'),
-                'numero_orden': c.numero_orden,
+                'numero_orden': numero_orden,
                 'valor_total_pagar': float(c.Valor_total_pagar)
             })
         
@@ -1306,23 +1309,30 @@ def generar_reporte_consumos_por_periodo(fecha_inicio, fecha_fin, cuenta=None):
         db.close()
 
 
-def generar_reporte_consumos_por_cuenta(cuenta):
-    """Genera reporte de todos los consumos de una cuenta específica.
+def generar_reporte_consumos_por_cuenta(cuenta=None):
+    """Genera reporte de todos los consumos de una cuenta específica o todas las cuentas.
     
     Args:
-        cuenta: Número de cuenta
+        cuenta: Número de cuenta (None para todas las cuentas)
     
     Returns:
         Lista de diccionarios con datos de consumos
     """
     db = SessionLocal()
     try:
-        consumos = db.query(Consumo).filter(
-            Consumo.cuenta == cuenta
-        ).order_by(Consumo.fecha_maxima_pago.desc()).all()
+        query = db.query(Consumo)
+        
+        # Filtrar por cuenta solo si se especifica
+        if cuenta is not None:
+            query = query.filter(Consumo.cuenta == cuenta)
+        
+        consumos = query.order_by(Consumo.fecha_maxima_pago.desc()).all()
         
         resultado = []
         for c in consumos:
+            # Obtener número de orden desde la relación
+            numero_orden = c.orden_pago_rel.numero_orden if c.orden_pago_rel else 'N/A'
+            
             resultado.append({
                 'id': c.id,
                 'cuenta': c.cuenta,
@@ -1330,7 +1340,7 @@ def generar_reporte_consumos_por_cuenta(cuenta):
                 'consumo_kwh': float(c.consumo_kwh),
                 'valor_kwh': float(c.valor_kwh),
                 'fecha_maxima_pago': c.fecha_maxima_pago.strftime('%Y-%m-%d'),
-                'numero_orden': c.numero_orden,
+                'numero_orden': numero_orden,
                 'valor_total_pagar': float(c.Valor_total_pagar)
             })
         
@@ -1350,12 +1360,21 @@ def generar_reporte_consumos_por_orden(numero_orden):
     """
     db = SessionLocal()
     try:
+        # Primero obtener el ID de la orden por su número
+        orden = db.query(OrdenPago).filter(OrdenPago.numero_orden == numero_orden).first()
+        if not orden:
+            return []
+        
+        # Buscar consumos por orden_pago_id
         consumos = db.query(Consumo).filter(
-            Consumo.numero_orden == numero_orden
+            Consumo.orden_pago_id == orden.id
         ).order_by(Consumo.cuenta).all()
         
         resultado = []
         for c in consumos:
+            # Obtener número de orden desde la relación
+            num_orden = c.orden_pago_rel.numero_orden if c.orden_pago_rel else 'N/A'
+            
             resultado.append({
                 'id': c.id,
                 'cuenta': c.cuenta,
@@ -1363,7 +1382,7 @@ def generar_reporte_consumos_por_orden(numero_orden):
                 'consumo_kwh': float(c.consumo_kwh),
                 'valor_kwh': float(c.valor_kwh),
                 'fecha_maxima_pago': c.fecha_maxima_pago.strftime('%Y-%m-%d'),
-                'numero_orden': c.numero_orden,
+                'numero_orden': num_orden,
                 'valor_total_pagar': float(c.Valor_total_pagar)
             })
         
@@ -1426,9 +1445,12 @@ def generar_reporte_clientes():
         for cliente in clientes:
             resultado.append({
                 'id': cliente.id,
-                'nombre': cliente.nombre,
-                'email': cliente.email,
-                'telefono': cliente.telefono
+                'cuenta': cliente.cuenta,
+                'nombre': cliente.nombre or '',
+                'direccion': cliente.direccion or '',
+                'estrato': cliente.estrato or '',
+                'numero_medidor': cliente.numero_medidor or '',
+                'activo': 'Sí' if cliente.activo else 'No'
             })
         
         return resultado
@@ -1462,14 +1484,14 @@ def generar_reporte_ordenes_pago(fecha_inicio=None, fecha_fin=None):
         
         resultado = []
         for orden in ordenes:
-            # Contar consumos asociados
+            # Contar consumos asociados usando la FK orden_pago_id
             num_consumos = db.query(Consumo).filter(
-                Consumo.numero_orden == orden.numero_orden
+                Consumo.orden_pago_id == orden.id
             ).count()
             
-            # Calcular total
+            # Calcular total usando la FK
             consumos = db.query(Consumo).filter(
-                Consumo.numero_orden == orden.numero_orden
+                Consumo.orden_pago_id == orden.id
             ).all()
             total = sum(float(c.Valor_total_pagar) for c in consumos)
             
