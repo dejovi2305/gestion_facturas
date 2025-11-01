@@ -1526,7 +1526,7 @@ def generar_reporte_valor_total_por_mes(mes: int, ano: int):
         ano: año (ej: 2025)
 
     Returns:
-        Lista de dicts: {'numero_cuenta': int, 'total_a_pagar': float}
+        Lista de dicts: {'numero_cuenta': int, 'valor_total_pagar': float}
     """
     db = SessionLocal()
     try:
@@ -1544,7 +1544,44 @@ def generar_reporte_valor_total_por_mes(mes: int, ano: int):
         for r in rows:
             resultado.append({
                 'numero_cuenta': int(r.numero_cuenta),
-                'total_a_pagar': float(r.total_a_pagar) if r.total_a_pagar is not None else 0.0
+                # devolver con la misma clave que usan los consumos individuales
+                'valor_total_pagar': float(r.total_a_pagar) if r.total_a_pagar is not None else 0.0
+            })
+
+        return resultado
+    finally:
+        db.close()
+
+
+def generar_reporte_consumos_por_mes(mes: int, ano: int):
+    """Devuelve todos los consumos cuya fecha_maxima_pago corresponde al mes/año indicados.
+
+    Args:
+        mes: 1-12
+        ano: año (ej. 2025)
+
+    Returns:
+        Lista de diccionarios con campos similares a generar_reporte_consumos_por_periodo
+    """
+    db = SessionLocal()
+    try:
+        consumos = db.query(Consumo).filter(
+            extract('month', Consumo.fecha_maxima_pago) == int(mes),
+            extract('year', Consumo.fecha_maxima_pago) == int(ano)
+        ).order_by(Consumo.fecha_maxima_pago.desc()).all()
+
+        resultado = []
+        for c in consumos:
+            numero_orden = c.orden_pago_rel.numero_orden if c.orden_pago_rel else 'N/A'
+            resultado.append({
+                'id': c.id,
+                'cuenta': c.cuenta,
+                'cufe': c.cufe,
+                'consumo_kwh': float(c.consumo_kwh),
+                'valor_kwh': float(c.valor_kwh),
+                'fecha_maxima_pago': c.fecha_maxima_pago.strftime('%Y-%m-%d'),
+                'numero_orden': numero_orden,
+                'valor_total_pagar': float(c.Valor_total_pagar)
             })
 
         return resultado

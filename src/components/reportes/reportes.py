@@ -17,6 +17,7 @@ from config.database import (
     generar_reporte_clientes,
     generar_reporte_ordenes_pago,
     generar_reporte_valor_total_por_mes,
+    generar_reporte_consumos_por_mes,
     listar_cuentas,
     listar_ordenes_pago
 )
@@ -155,6 +156,8 @@ class ReportesWidget(QWidget):
                 self._generar_ordenes_pago()
             elif tipo == 6:  # Valor Total a Pagar por Mes
                 self._generar_valor_total_por_mes()
+            elif tipo == 7:  # Consumos del Mes
+                self._generar_consumos_por_mes()
             
             # Habilitar botón de exportar si hay datos
             self.btn_exportar.setEnabled(len(self.datos_reporte) > 0)
@@ -253,7 +256,7 @@ class ReportesWidget(QWidget):
             ano = int(self.spn_ano.value())
 
             datos = generar_reporte_valor_total_por_mes(mes, ano)
-            # datos: lista de dicts { 'numero_cuenta': int, 'total_a_pagar': float }
+            # datos: lista de dicts { 'numero_cuenta': int, 'valor_total_pagar': float }
             self.datos_reporte = datos
             self.headers_reporte = ['Número Cuenta', 'Total a Pagar']
             # Mostrar detalle por cuenta
@@ -261,13 +264,28 @@ class ReportesWidget(QWidget):
 
             # Calcular suma total del mes y mostrar en la etiqueta de info
             try:
-                total_mes = sum(float(d.get('total_a_pagar', 0) or 0) for d in datos)
+                total_mes = sum(float(d.get('valor_total_pagar', 0) or 0) for d in datos)
                 self.lbl_info.setText(f"✓ {len(datos)} registros generados — Suma total mes: ${total_mes:,.2f}")
             except Exception:
                 # Si falla formato, mostrar mensaje simple
                 self.lbl_info.setText(f"✓ {len(datos)} registros generados")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al generar reporte por mes: {e}")
+
+    def _generar_consumos_por_mes(self):
+        """Genera el reporte con todos los consumos del mes/año seleccionado."""
+        try:
+            mes = int(self.cmb_mes.currentIndex()) + 1
+            ano = int(self.spn_ano.value())
+
+            self.datos_reporte = generar_reporte_consumos_por_mes(mes, ano)
+            self.headers_reporte = [
+                'ID', 'Cuenta', 'CUFE', 'Consumo kWh', 'Valor kWh',
+                'Fecha Máx. Pago', 'Núm. Orden', 'Total a Pagar'
+            ]
+            self._mostrar_en_tabla()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al generar consumos por mes: {e}")
     
     def _mostrar_en_tabla(self):
         """Muestra los datos del reporte en la tabla de vista previa."""
@@ -275,30 +293,33 @@ class ReportesWidget(QWidget):
             self.tbl_vista_previa.setRowCount(0)
             self.tbl_vista_previa.setColumnCount(0)
             return
-        
-        # Configurar tabla
+        # Excluir visualmente la columna 'cufe' en la vista previa.
+        # Nota: no modificamos self.headers_reporte porque el CSV debe conservar
+        # todas las columnas; aquí solo construimos los headers visibles.
+        display_headers = [h for h in self.headers_reporte if self._header_to_key(h) != 'cufe']
+
+        # Configurar tabla usando solo los headers visibles
         self.tbl_vista_previa.setRowCount(len(self.datos_reporte))
-        self.tbl_vista_previa.setColumnCount(len(self.headers_reporte))
-        self.tbl_vista_previa.setHorizontalHeaderLabels(self.headers_reporte)
-        
-        # Llenar datos
+        self.tbl_vista_previa.setColumnCount(len(display_headers))
+        self.tbl_vista_previa.setHorizontalHeaderLabels(display_headers)
+
+        # Llenar datos (usando sólo display_headers)
         for i, fila in enumerate(self.datos_reporte):
-            for j, header in enumerate(self.headers_reporte):
-                # Obtener clave del dict (convertir header a snake_case)
+            for j, header in enumerate(display_headers):
                 key = self._header_to_key(header)
                 valor = str(fila.get(key, ''))
-                
+
                 item = QTableWidgetItem(valor)
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.tbl_vista_previa.setItem(i, j, item)
         
-        # Si el reporte contiene la columna total_a_pagar, agregar fila TOTAL al final
+    # Si el reporte contiene la columna valor_total_pagar, agregar fila TOTAL al final
         try:
-            # Determinar si alguno de los headers corresponde a total_a_pagar
-            columns_keys = [self._header_to_key(h) for h in self.headers_reporte]
-            if 'total_a_pagar' in columns_keys:
+            # Determinar si alguno de los headers visibles corresponde a valor_total_pagar
+            display_keys = [self._header_to_key(h) for h in display_headers]
+            if 'valor_total_pagar' in display_keys:
                 # Calcular suma
-                total_mes = sum(float(row.get('total_a_pagar', 0) or 0) for row in self.datos_reporte)
+                total_mes = sum(float(row.get('valor_total_pagar', 0) or 0) for row in self.datos_reporte)
                 # Añadir fila final
                 last_row = self.tbl_vista_previa.rowCount()
                 self.tbl_vista_previa.insertRow(last_row)
@@ -311,7 +332,7 @@ class ReportesWidget(QWidget):
                 self.tbl_vista_previa.setItem(last_row, 0, item_total_label)
 
                 # Colocar suma en la columna correspondiente
-                col_index = columns_keys.index('total_a_pagar')
+                col_index = display_keys.index('valor_total_pagar')
                 item_total_val = QTableWidgetItem(f"{total_mes:,.2f}")
                 item_total_val.setFont(font_b)
                 item_total_val.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -342,7 +363,8 @@ class ReportesWidget(QWidget):
             'Último Consumo kWh': 'ultimo_consumo_kwh',
             'Última Fecha Pago': 'ultima_fecha_pago',
             'Último Valor a Pagar': 'ultimo_valor_pagar',
-            'Total a Pagar': 'total_a_pagar',
+            # NOTE: keep 'Total a Pagar' mapped to 'valor_total_pagar' so consumption rows
+            # and aggregated rows share the same key used by the table/export logic.
             'Nombre': 'nombre',
             'Email': 'email',
             'Teléfono': 'telefono',
@@ -390,15 +412,15 @@ class ReportesWidget(QWidget):
                 # Escribir datos
                 writer.writerows(self.datos_reporte)
 
-                # Si el reporte contiene total_a_pagar, escribir fila TOTAL al final
+                # Si el reporte contiene valor_total_pagar, escribir fila TOTAL al final
                 try:
                     keys = [self._header_to_key(h) for h in self.headers_reporte]
-                    if 'total_a_pagar' in keys:
-                        total = sum(float(d.get('total_a_pagar', 0) or 0) for d in self.datos_reporte)
+                    if 'valor_total_pagar' in keys:
+                        total = sum(float(d.get('valor_total_pagar', 0) or 0) for d in self.datos_reporte)
                         total_row = {k: '' for k in keys}
                         # Poner etiqueta TOTAL en la primera columna
                         total_row[keys[0]] = 'TOTAL'
-                        total_row['total_a_pagar'] = f"{total:.2f}"
+                        total_row['valor_total_pagar'] = f"{total:.2f}"
                         writer.writerow(total_row)
                 except Exception:
                     pass
