@@ -124,13 +124,28 @@ class CargarFacturaWidget(QWidget):
         if carpeta:
             self.ruta_archivo = carpeta
             self.txt_ruta_archivo.setText(carpeta)
-            
-            # Buscar archivos XML en la carpeta
+            # Buscar archivos XML en la carpeta y dentro de ZIPs en la misma carpeta
             try:
                 archivos_xml = list(Path(carpeta).glob("*.xml"))
+                zip_files = list(Path(carpeta).glob("*.zip"))
+
+                # Contar XMLs directos
                 count = len(archivos_xml)
+
+                # Contar entradas XML dentro de cada ZIP (no extraemos aquí)
+                for z in zip_files:
+                    try:
+                        with zipfile.ZipFile(str(z), 'r') as zip_ref:
+                            xml_files_in_zip = [f for f in zip_ref.namelist() if f.lower().endswith('.xml')]
+                            count += len(xml_files_in_zip)
+                    except Exception:
+                        # Ignorar ZIPs corruptos/ilegibles en este punto
+                        continue
+
+                # Guardar solo los XML encontrados directamente en la carpeta.
+                # Los XML dentro de ZIPs se procesarán al ejecutar _procesar_masivo (se extraerán a un temp dir).
                 self.archivos_a_procesar = [str(f) for f in archivos_xml]
-                self.txt_resultado.setPlainText(f"📁 Carpeta seleccionada: {count} archivos XML encontrados")
+                self.txt_resultado.setPlainText(f"📁 Carpeta seleccionada: {count} archivos XML encontrados (incluyendo ZIPs)")
                 self.btn_procesar.setEnabled(count > 0)
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"Error al leer carpeta: {str(e)}")
@@ -180,8 +195,23 @@ class CargarFacturaWidget(QWidget):
                 archivos_xml = list(Path(temp_dir).rglob("*.xml"))
             
             elif os.path.isdir(self.ruta_archivo):
-                # Carpeta directa
+                # Carpeta directa: buscar XMLs y también revisar ZIPs dentro de la carpeta
                 archivos_xml = list(Path(self.ruta_archivo).glob("*.xml"))
+
+                # Buscar ZIPs en la carpeta y extraer sus XMLs a un directorio temporal
+                zip_files = list(Path(self.ruta_archivo).glob("*.zip"))
+                if zip_files:
+                    temp_dir = tempfile.mkdtemp()
+                    for z in zip_files:
+                        try:
+                            with zipfile.ZipFile(str(z), 'r') as zip_ref:
+                                zip_ref.extractall(temp_dir)
+                        except Exception:
+                            # Si un ZIP falla al extraer, lo saltamos y seguimos con los demás
+                            continue
+                    # Agregar XMLs extraídos de los ZIPs
+                    archivos_xml_from_zips = list(Path(temp_dir).rglob("*.xml"))
+                    archivos_xml.extend(archivos_xml_from_zips)
             
             else:
                 QMessageBox.warning(self, "Error", "Selección no válida.")
