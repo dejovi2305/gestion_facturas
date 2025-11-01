@@ -151,8 +151,11 @@ def crear_cuenta(numero_cuenta: int, activo: bool = True) -> tuple[bool, str, in
         db.close()
 
 
-def actualizar_cuenta(cuenta_id: int, numero_cuenta: int | None = None, activo: bool | None = None) -> tuple[bool, str]:
-    """Actualiza numero_cuenta y/o activo de una cuenta existente."""
+def actualizar_cuenta(cuenta_id: int, numero_cuenta: int | None = None, activo: bool | None = None, motivo: str | None = None) -> tuple[bool, str]:
+    """Actualiza numero_cuenta y/o activo de una cuenta existente.
+
+    Ahora acepta 'motivo' (opcional) para registrar la razón del cambio de estado.
+    """
     db = SessionLocal()
     try:
         c = db.query(Cuenta).filter(Cuenta.id == cuenta_id).first()
@@ -173,6 +176,13 @@ def actualizar_cuenta(cuenta_id: int, numero_cuenta: int | None = None, activo: 
             c.numero_cuenta = numero_cuenta
         if activo is not None:
             c.activo = bool(activo)
+            # Registrar motivo del cambio si se proporcionó
+            if motivo is not None:
+                try:
+                    c.motivo_cambio = motivo
+                except Exception:
+                    # No bloquear la operación por errores de asignación de texto
+                    pass
         db.commit()
         return True, "Cuenta actualizada."
     except Exception as e:

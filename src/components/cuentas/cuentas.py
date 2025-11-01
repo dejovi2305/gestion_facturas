@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QCheckBox, QDialog, QFormLayout, QDialogButtonBox,
     QLineEdit, QMessageBox, QHeaderView
 )
+from PyQt6.QtWidgets import QTextEdit
 from PyQt6.QtCore import Qt, QRegularExpression
 from PyQt6.QtGui import QRegularExpressionValidator, QColor, QBrush
 from config.database import (
@@ -12,11 +13,12 @@ from config.database import (
     obtener_ultimo_consumo_por_cuenta, calcular_estado_alerta_consumo, SessionLocal
 )
 from models import Alerta
+from models.cuenta import Cuenta
 from utils.ui import resolve_ui_path
 
 
 class CuentaDialog(QDialog):
-    def __init__(self, parent=None, *, titulo="Cuenta", numero_cuenta: int | None = None, activo: bool = True):
+    def __init__(self, parent=None, *, titulo="Cuenta", numero_cuenta: int | None = None, activo: bool = True, motivo: str | None = None):
         super().__init__(parent)
         self.setWindowTitle(titulo)
         form = QFormLayout(self)
@@ -32,8 +34,19 @@ class CuentaDialog(QDialog):
                 self.ed_numero.setText("")
         self.chk_activo = QCheckBox("Activa", self)
         self.chk_activo.setChecked(bool(activo))
+        # Campo motivo (opcional) para documentar cambios de estado
+        self.ed_motivo = QTextEdit(self)
+        self.ed_motivo.setPlaceholderText("Motivo del cambio de estado (opcional)")
+        self.ed_motivo.setFixedHeight(80)
+        if motivo:
+            try:
+                self.ed_motivo.setPlainText(str(motivo))
+            except Exception:
+                pass
+
         form.addRow("Número de cuenta", self.ed_numero)
         form.addRow("Estado", self.chk_activo)
+        form.addRow("Motivo", self.ed_motivo)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, parent=self)
         buttons.accepted.connect(self.accept)
@@ -46,6 +59,7 @@ class CuentaDialog(QDialog):
         return {
             "numero_cuenta": numero,
             "activo": bool(self.chk_activo.isChecked()),
+            "motivo": self.ed_motivo.toPlainText().strip(),
         }
 
 
@@ -70,11 +84,11 @@ class CuentasWidget(QWidget):
         self.btn_editar.clicked.connect(self._editar)
         self.btn_eliminar.clicked.connect(self._eliminar)
         self.btn_refrescar.clicked.connect(self._refrescar)
-
         # Configurar tabla para estabilidad de tamaño (no cambiar ancho en cada refresh)
         self.tbl: QTableWidget = self.tbl_cuentas
-        self.tbl.setColumnCount(5)
-        self.tbl.setHorizontalHeaderLabels(["Estado", "ID", "Número de cuenta", "Días Restantes", "Activa"])
+        # Añadir columna 'Motivo' para mostrar la razón del cambio de estado
+        self.tbl.setColumnCount(6)
+        self.tbl.setHorizontalHeaderLabels(["Estado", "ID", "Número de cuenta", "Motivo", "Días Restantes", "Activa"])
         self.tbl.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tbl.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tbl.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -86,8 +100,9 @@ class CuentasWidget(QWidget):
         self.tbl.setColumnWidth(0, 120)  # Estado
         self.tbl.setColumnWidth(1, 60)   # ID
         self.tbl.setColumnWidth(2, 150)  # Número de cuenta
-        self.tbl.setColumnWidth(3, 150)  # Días Restantes
-        self.tbl.setColumnWidth(4, 80)   # Activa
+        self.tbl.setColumnWidth(3, 250)  # Motivo
+        self.tbl.setColumnWidth(4, 150)  # Días Restantes
+        self.tbl.setColumnWidth(5, 80)   # Activa
 
         self._refrescar()
 
@@ -101,6 +116,13 @@ class CuentasWidget(QWidget):
         # Si está desmarcado: mostrar solo activas (activo=True)
         activo_flag = False if self.chk_mostrar_inactivas.isChecked() else True
         cuentas = listar_cuentas(activo=activo_flag)
+
+        # Mostrar/ocultar columna 'Motivo' según si estamos listando inactivas
+        # Si mostramos cuentas activas (activo_flag True) no es relevante mostrar motivo
+        try:
+            self.tbl.setColumnHidden(3, activo_flag)
+        except Exception:
+            pass
 
         # Obtener TODAS las alertas configuradas de una vez (optimización)
         db = SessionLocal()
@@ -172,15 +194,19 @@ class CuentasWidget(QWidget):
                 dias_item = QTableWidgetItem(dias_texto)
                 dias_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 dias_item.setBackground(QBrush(color_fondo))
-                
+
                 act_item = QTableWidgetItem("Sí" if c.activo else "No")
                 act_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                
+
+                motivo_item = QTableWidgetItem(c.motivo_cambio or "")
+                motivo_item.setTextAlignment(Qt.AlignmentFlag.AlignLeft)
+
                 self.tbl.setItem(i, 0, estado_item)
                 self.tbl.setItem(i, 1, id_item)
                 self.tbl.setItem(i, 2, num_item)
-                self.tbl.setItem(i, 3, dias_item)
-                self.tbl.setItem(i, 4, act_item)
+                self.tbl.setItem(i, 3, motivo_item)
+                self.tbl.setItem(i, 4, dias_item)
+                self.tbl.setItem(i, 5, act_item)
         finally:
             self.tbl.setUpdatesEnabled(True)
 
@@ -214,14 +240,25 @@ class CuentasWidget(QWidget):
         # Pre-cargar desde tabla
         row = self.tbl.currentRow()
         num_txt = self.tbl.item(row, 2).text() if self.tbl.item(row, 2) else "0"
-        act_txt = self.tbl.item(row, 4).text() if self.tbl.item(row, 4) else "No"
-        dlg = CuentaDialog(self, titulo="Editar cuenta", numero_cuenta=int(num_txt), activo=(act_txt == "Sí"))
+        act_txt = self.tbl.item(row, 5).text() if self.tbl.item(row, 5) else "No"
+
+        # Obtener motivo actual desde la BD para precargar en el diálogo
+        motivo_text = None
+        db = SessionLocal()
+        try:
+            cuenta_obj = db.query(Cuenta).filter(Cuenta.id == cid).first()
+            if cuenta_obj:
+                motivo_text = cuenta_obj.motivo_cambio
+        finally:
+            db.close()
+
+        dlg = CuentaDialog(self, titulo="Editar cuenta", numero_cuenta=int(num_txt), activo=(act_txt == "Sí"), motivo=motivo_text)
         if dlg.exec():
             vals = dlg.values()
             if vals["numero_cuenta"] <= 0 or len(str(vals["numero_cuenta"])) < 6:
                 QMessageBox.warning(self, "Editar cuenta", "Ingrese un número de cuenta válido (6-12 dígitos).")
                 return
-            ok, msg = actualizar_cuenta(cid, numero_cuenta=vals["numero_cuenta"], activo=vals["activo"]) 
+            ok, msg = actualizar_cuenta(cid, numero_cuenta=vals["numero_cuenta"], activo=vals["activo"], motivo=vals.get("motivo")) 
             if ok:
                 QMessageBox.information(self, "Editar cuenta", msg)
                 self._refrescar()
