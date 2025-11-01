@@ -6,7 +6,9 @@ from PyQt6.QtWidgets import (
     QWidget, QTableWidget, QTableWidgetItem, QPushButton, 
     QComboBox, QDateEdit, QLabel, QFileDialog, QMessageBox, QHeaderView
 )
+from PyQt6.QtWidgets import QSpinBox
 from PyQt6.QtCore import Qt, QDate
+from PyQt6.QtGui import QFont
 from config.database import (
     generar_reporte_consumos_por_periodo,
     generar_reporte_consumos_por_cuenta,
@@ -14,6 +16,7 @@ from config.database import (
     generar_reporte_resumen_cuentas,
     generar_reporte_clientes,
     generar_reporte_ordenes_pago,
+    generar_reporte_valor_total_por_mes,
     listar_cuentas,
     listar_ordenes_pago
 )
@@ -52,6 +55,16 @@ class ReportesWidget(QWidget):
         
         # Cargar cuentas en el combo
         self._cargar_cuentas()
+
+        # Configurar controles mes/año (si existen en UI)
+        try:
+            hoy_q = QDate.currentDate()
+            # cmb_mes: 0-based index (Enero=0)
+            self.cmb_mes.setCurrentIndex(hoy_q.month() - 1)
+            self.spn_ano.setValue(hoy_q.year())
+        except Exception:
+            # Si UI no tiene esos controles por alguna razón, ignorar
+            pass
         
         # Conectar señales
         self.btn_generar.clicked.connect(self._generar_reporte)
@@ -83,6 +96,7 @@ class ReportesWidget(QWidget):
         # 3: Resumen de Cuentas (ninguno)
         # 4: Listado de Clientes (ninguno)
         # 5: Órdenes de Pago (fecha inicio, fecha fin opcional)
+    # 6: Valor Total a Pagar por Mes (mes, año)
         
         # Mostrar/ocultar según tipo
         if tipo == 0:  # Consumos por Período
@@ -110,6 +124,17 @@ class ReportesWidget(QWidget):
             self.dt_fecha_inicio.setEnabled(True)
             self.dt_fecha_fin.setEnabled(True)
             self.cmb_cuenta.setEnabled(False)
+        elif tipo == 6:  # Valor Total por Mes
+            # Usar controles mes/año
+            # Deshabilitar los DateEdits y habilitar cmb_mes/spn_ano
+            self.dt_fecha_inicio.setEnabled(False)
+            self.dt_fecha_fin.setEnabled(False)
+            self.cmb_cuenta.setEnabled(False)
+            try:
+                self.cmb_mes.setEnabled(True)
+                self.spn_ano.setEnabled(True)
+            except Exception:
+                pass
     
     def _generar_reporte(self):
         """Genera el reporte seleccionado y lo muestra en la tabla."""
@@ -128,6 +153,8 @@ class ReportesWidget(QWidget):
                 self._generar_listado_clientes()
             elif tipo == 5:  # Órdenes de Pago
                 self._generar_ordenes_pago()
+            elif tipo == 6:  # Valor Total a Pagar por Mes
+                self._generar_valor_total_por_mes()
             
             # Habilitar botón de exportar si hay datos
             self.btn_exportar.setEnabled(len(self.datos_reporte) > 0)
@@ -218,6 +245,29 @@ class ReportesWidget(QWidget):
         self.datos_reporte = generar_reporte_ordenes_pago(fecha_inicio, fecha_fin)
         self.headers_reporte = ['ID', 'Número Orden', 'Núm. Consumos', 'Total']
         self._mostrar_en_tabla()
+
+    def _generar_valor_total_por_mes(self):
+        """Genera reporte que muestra el total a pagar por cuenta para un mes y año dados."""
+        try:
+            mes = int(self.cmb_mes.currentIndex()) + 1
+            ano = int(self.spn_ano.value())
+
+            datos = generar_reporte_valor_total_por_mes(mes, ano)
+            # datos: lista de dicts { 'numero_cuenta': int, 'total_a_pagar': float }
+            self.datos_reporte = datos
+            self.headers_reporte = ['Número Cuenta', 'Total a Pagar']
+            # Mostrar detalle por cuenta
+            self._mostrar_en_tabla()
+
+            # Calcular suma total del mes y mostrar en la etiqueta de info
+            try:
+                total_mes = sum(float(d.get('total_a_pagar', 0) or 0) for d in datos)
+                self.lbl_info.setText(f"✓ {len(datos)} registros generados — Suma total mes: ${total_mes:,.2f}")
+            except Exception:
+                # Si falla formato, mostrar mensaje simple
+                self.lbl_info.setText(f"✓ {len(datos)} registros generados")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al generar reporte por mes: {e}")
     
     def _mostrar_en_tabla(self):
         """Muestra los datos del reporte en la tabla de vista previa."""
@@ -242,6 +292,33 @@ class ReportesWidget(QWidget):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.tbl_vista_previa.setItem(i, j, item)
         
+        # Si el reporte contiene la columna total_a_pagar, agregar fila TOTAL al final
+        try:
+            # Determinar si alguno de los headers corresponde a total_a_pagar
+            columns_keys = [self._header_to_key(h) for h in self.headers_reporte]
+            if 'total_a_pagar' in columns_keys:
+                # Calcular suma
+                total_mes = sum(float(row.get('total_a_pagar', 0) or 0) for row in self.datos_reporte)
+                # Añadir fila final
+                last_row = self.tbl_vista_previa.rowCount()
+                self.tbl_vista_previa.insertRow(last_row)
+                # Colocar etiqueta TOTAL en la primera columna
+                item_total_label = QTableWidgetItem('TOTAL')
+                font_b = QFont()
+                font_b.setBold(True)
+                item_total_label.setFont(font_b)
+                item_total_label.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.tbl_vista_previa.setItem(last_row, 0, item_total_label)
+
+                # Colocar suma en la columna correspondiente
+                col_index = columns_keys.index('total_a_pagar')
+                item_total_val = QTableWidgetItem(f"{total_mes:,.2f}")
+                item_total_val.setFont(font_b)
+                item_total_val.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.tbl_vista_previa.setItem(last_row, col_index, item_total_val)
+        except Exception:
+            pass
+
         # Ajustar columnas
         self.tbl_vista_previa.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.ResizeToContents
@@ -265,6 +342,7 @@ class ReportesWidget(QWidget):
             'Último Consumo kWh': 'ultimo_consumo_kwh',
             'Última Fecha Pago': 'ultima_fecha_pago',
             'Último Valor a Pagar': 'ultimo_valor_pagar',
+            'Total a Pagar': 'total_a_pagar',
             'Nombre': 'nombre',
             'Email': 'email',
             'Teléfono': 'telefono',
@@ -311,6 +389,19 @@ class ReportesWidget(QWidget):
                 
                 # Escribir datos
                 writer.writerows(self.datos_reporte)
+
+                # Si el reporte contiene total_a_pagar, escribir fila TOTAL al final
+                try:
+                    keys = [self._header_to_key(h) for h in self.headers_reporte]
+                    if 'total_a_pagar' in keys:
+                        total = sum(float(d.get('total_a_pagar', 0) or 0) for d in self.datos_reporte)
+                        total_row = {k: '' for k in keys}
+                        # Poner etiqueta TOTAL en la primera columna
+                        total_row[keys[0]] = 'TOTAL'
+                        total_row['total_a_pagar'] = f"{total:.2f}"
+                        writer.writerow(total_row)
+                except Exception:
+                    pass
             
             QMessageBox.information(
                 self, "Éxito",

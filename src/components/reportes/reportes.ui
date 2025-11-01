@@ -16,9 +16,9 @@
      <property name="text">
       <string>📊 Generación de Reportes</string>
      </property>
-     <property name="styleSheet">
-      <string>font-size: 16px; font-weight: bold;</string>
-     </property>
+       <property name="styleSheet">
+        <string>font-size: 16px; font-weight: bold;</string>
+       </property>
     </widget>
    </item>
    <item>
@@ -66,6 +66,11 @@
           <item>
            <property name="text">
             <string>Órdenes de Pago</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Valor Total a Pagar por Mes</string>
            </property>
           </item>
          </widget>
@@ -118,6 +123,94 @@
           </property>
          </widget>
         </item>
+  <item row="4" column="0">
+   <widget class="QLabel" name="lbl_mes">
+    <property name="text">
+     <string>Mes:</string>
+    </property>
+   </widget>
+  </item>
+  <item row="4" column="1">
+   <widget class="QComboBox" name="cmb_mes">
+    <item>
+     <property name="text">
+      <string>Enero</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Febrero</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Marzo</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Abril</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Mayo</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Junio</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Julio</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Agosto</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Septiembre</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Octubre</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Noviembre</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Diciembre</string>
+     </property>
+    </item>
+   </widget>
+  </item>
+  <item row="5" column="0">
+   <widget class="QLabel" name="lbl_ano">
+    <property name="text">
+     <string>Año:</string>
+    </property>
+   </widget>
+  </item>
+  <item row="5" column="1">
+   <widget class="QSpinBox" name="spn_ano">
+    <property name="minimum">
+     <number>2000</number>
+    </property>
+    <property name="maximum">
+     <number>2099</number>
+    </property>
+   </widget>
+  </item>
        </layout>
       </item>
       <item>

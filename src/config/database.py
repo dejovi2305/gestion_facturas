@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine
+from sqlalchemy import func, extract
 from sqlalchemy.orm import sessionmaker, joinedload
 from datetime import datetime, date
 from models import Base
@@ -1502,6 +1503,40 @@ def generar_reporte_ordenes_pago(fecha_inicio=None, fecha_fin=None):
                 'total': total
             })
         
+        return resultado
+    finally:
+        db.close()
+
+
+def generar_reporte_valor_total_por_mes(mes: int, ano: int):
+    """Genera un reporte con el total a pagar por cuenta para un mes y año dados.
+
+    Args:
+        mes: número de mes (1-12)
+        ano: año (ej: 2025)
+
+    Returns:
+        Lista de dicts: {'numero_cuenta': int, 'total_a_pagar': float}
+    """
+    db = SessionLocal()
+    try:
+        # Filtrar consumos por mes/año (fecha_maxima_pago)
+        q = db.query(
+            Consumo.cuenta.label('numero_cuenta'),
+            func.sum(Consumo.Valor_total_pagar).label('total_a_pagar')
+        ).filter(
+            extract('month', Consumo.fecha_maxima_pago) == int(mes),
+            extract('year', Consumo.fecha_maxima_pago) == int(ano)
+        ).group_by(Consumo.cuenta).order_by(Consumo.cuenta)
+
+        rows = q.all()
+        resultado = []
+        for r in rows:
+            resultado.append({
+                'numero_cuenta': int(r.numero_cuenta),
+                'total_a_pagar': float(r.total_a_pagar) if r.total_a_pagar is not None else 0.0
+            })
+
         return resultado
     finally:
         db.close()
