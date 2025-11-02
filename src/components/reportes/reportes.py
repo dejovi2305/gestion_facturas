@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtWidgets import QSpinBox
 from PyQt6.QtCore import Qt, QDate
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QColor
 from config.database import (
     generar_reporte_consumos_por_periodo,
     generar_reporte_consumos_por_cuenta,
@@ -136,6 +136,21 @@ class ReportesWidget(QWidget):
                 self.spn_ano.setEnabled(True)
             except Exception:
                 pass
+        elif tipo == 7:  # Consumos por Mes
+            # Usar controles mes/año
+            self.dt_fecha_inicio.setEnabled(False)
+            self.dt_fecha_fin.setEnabled(False)
+            self.cmb_cuenta.setEnabled(False)
+            try:
+                self.cmb_mes.setEnabled(True)
+                self.spn_ano.setEnabled(True)
+            except Exception:
+                pass
+        elif tipo == 8:  # Comparativo mensual por cuenta
+            # Usar los DateEdits para definir rango inicio/fin (se comparan meses completos)
+            self.dt_fecha_inicio.setEnabled(True)
+            self.dt_fecha_fin.setEnabled(True)
+            self.cmb_cuenta.setEnabled(False)
     
     def _generar_reporte(self):
         """Genera el reporte seleccionado y lo muestra en la tabla."""
@@ -158,6 +173,8 @@ class ReportesWidget(QWidget):
                 self._generar_valor_total_por_mes()
             elif tipo == 7:  # Consumos del Mes
                 self._generar_consumos_por_mes()
+            elif tipo == 8:  # Comparativo mensual por cuenta
+                self._generar_comparativo_consumos_rango()
             
             # Habilitar botón de exportar si hay datos
             self.btn_exportar.setEnabled(len(self.datos_reporte) > 0)
@@ -286,6 +303,117 @@ class ReportesWidget(QWidget):
             self._mostrar_en_tabla()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al generar consumos por mes: {e}")
+
+    def _generar_comparativo_consumos_rango(self):
+        """Genera un comparativo mes a mes por cuenta entre dos fechas (usar DateEdits como indicador de mes inicio/fin).
+
+        El comportamiento esperado: si el usuario ingresa Fecha Inicio = 2025-01-01 y Fecha Fin = 2025-12-31,
+        el comparativo será [Febrero - Enero], [Marzo - Febrero], ..., [Diciembre - Noviembre].
+        """
+        from config.database import generar_reporte_comparativo_consumos_rango
+        from datetime import date
+
+        fecha_inicio = self.dt_fecha_inicio.date().toPyDate()
+        fecha_fin = self.dt_fecha_fin.date().toPyDate()
+
+        if fecha_inicio > fecha_fin:
+            QMessageBox.warning(self, "Rango inválido", "La fecha de inicio debe ser anterior o igual a la fecha fin.")
+            return
+
+        # Extraer meses y años
+        mes_inicio = fecha_inicio.month
+        ano_inicio = fecha_inicio.year
+        mes_fin = fecha_fin.month
+        ano_fin = fecha_fin.year
+
+        datos = generar_reporte_comparativo_consumos_rango(mes_inicio, ano_inicio, mes_fin, ano_fin)
+
+        # datos: lista de dicts {'cuenta','year','month','valor_total_pagar','consumo_kwh'}
+        if not datos:
+            self.datos_reporte = []
+            self.headers_reporte = ['Cuenta', 'Periodo Actual', 'Valor Actual', 'Consumo Actual', 'Periodo Anterior', 'Valor Anterior', 'Consumo Anterior', 'Cambio Valor', 'Cambio Consumo']
+            self._mostrar_en_tabla()
+            self.lbl_info.setText("No se encontraron datos para el rango seleccionado")
+            return
+
+        # Construir estructura por cuenta y por mes ordenado
+        from collections import defaultdict, OrderedDict
+
+        cuentas = defaultdict(dict)
+        meses_presentes = set()
+        for r in datos:
+            key = (int(r['year']), int(r['month']))
+            cuentas[int(r['cuenta'])][key] = {
+                'valor_total_pagar': float(r.get('valor_total_pagar', 0.0) or 0.0),
+                'consumo_kwh': float(r.get('consumo_kwh', 0.0) or 0.0)
+            }
+            meses_presentes.add(key)
+
+        # Generar lista ordenada de meses entre rango
+        def generar_rango_meses(start_year, start_month, end_year, end_month):
+            y, m = start_year, start_month
+            out = []
+            while (y < end_year) or (y == end_year and m <= end_month):
+                out.append((y, m))
+                if m == 12:
+                    m = 1
+                    y += 1
+                else:
+                    m += 1
+            return out
+
+        meses_ordenados = generar_rango_meses(ano_inicio, mes_inicio, ano_fin, mes_fin)
+
+        resultado = []
+
+        # Para cada cuenta, completar meses faltantes con 0 y luego comparar mes a mes
+        for cuenta, datos_mes in sorted(cuentas.items()):
+            # Build list of values per month
+            valores = []
+            for y_m in meses_ordenados:
+                v = datos_mes.get(y_m, {'valor_total_pagar': 0.0, 'consumo_kwh': 0.0})
+                valores.append((y_m, v['valor_total_pagar'], v['consumo_kwh']))
+
+            # Comparar pares consecutivos
+            for idx in range(1, len(valores)):
+                (y_prev, m_prev), valor_prev, consumo_prev = valores[idx - 1][0], valores[idx - 1][1], valores[idx - 1][2]
+                (y_cur, m_cur), valor_cur, consumo_cur = valores[idx][0], valores[idx][1], valores[idx][2]
+
+                # Determine changes
+                delta_valor = valor_cur - valor_prev
+                delta_consumo = consumo_cur - consumo_prev
+
+                def cambio_label_and_state(delta):
+                    if delta > 0:
+                        return ('Subió', 'subio')
+                    elif delta < 0:
+                        return ('Bajó', 'bajo')
+                    else:
+                        return ('Igual', 'igual')
+
+                cambio_valor_label, cambio_valor_state = cambio_label_and_state(delta_valor)
+                cambio_consumo_label, cambio_consumo_state = cambio_label_and_state(delta_consumo)
+
+                periodo_actual = f"{m_cur:02d}-{y_cur}"
+                periodo_anterior = f"{m_prev:02d}-{y_prev}"
+
+                resultado.append({
+                    'cuenta': cuenta,
+                    'periodo_actual': periodo_actual,
+                    'valor_actual': round(valor_cur, 2),
+                    'consumo_actual': round(consumo_cur, 2),
+                    'periodo_anterior': periodo_anterior,
+                    'valor_anterior': round(valor_prev, 2),
+                    'consumo_anterior': round(consumo_prev, 2),
+                    'cambio_valor': cambio_valor_state,
+                    'cambio_consumo': cambio_consumo_state,
+                })
+
+        # Preparar headers y datos para mostrar
+        self.datos_reporte = resultado
+        self.headers_reporte = ['Cuenta', 'Periodo Actual', 'Valor Actual', 'Consumo Actual', 'Periodo Anterior', 'Valor Anterior', 'Consumo Anterior', 'Cambio Valor', 'Cambio Consumo']
+        self._mostrar_en_tabla()
+
     
     def _mostrar_en_tabla(self):
         """Muestra los datos del reporte en la tabla de vista previa."""
@@ -309,8 +437,34 @@ class ReportesWidget(QWidget):
                 key = self._header_to_key(header)
                 valor = str(fila.get(key, ''))
 
-                item = QTableWidgetItem(valor)
+                # Render special semaforo cells for comparativo
+                item = QTableWidgetItem()
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+                if key in ('cambio_valor', 'cambio_consumo'):
+                    # Expect values like 'subio', 'bajo', 'igual'
+                    state = str(fila.get(key, '')).lower()
+                    if state == 'subio':
+                        item.setText('Subió')
+                        try:
+                            item.setBackground(QColor('#ffcccc'))
+                        except Exception:
+                            pass
+                    elif state == 'bajo':
+                        item.setText('Bajó')
+                        try:
+                            item.setBackground(QColor('#ccffcc'))
+                        except Exception:
+                            pass
+                    else:
+                        item.setText('Igual')
+                        try:
+                            item.setBackground(QColor('#efefef'))
+                        except Exception:
+                            pass
+                else:
+                    item.setText(valor)
+
                 self.tbl_vista_previa.setItem(i, j, item)
         
     # Si el reporte contiene la columna valor_total_pagar, agregar fila TOTAL al final

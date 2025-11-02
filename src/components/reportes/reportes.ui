@@ -78,6 +78,11 @@
             <string>Consumos del Mes</string>
            </property>
           </item>
+          <item>
+           <property name="text">
+            <string>Comparativo mensual por cuenta</string>
+           </property>
+          </item>
          </widget>
         </item>
         <item row="1" column="0">

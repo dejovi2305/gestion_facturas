@@ -10,6 +10,7 @@ from models.consumo import Consumo
 from models.orden_pago import OrdenPago
 from models.alerta import Alerta
 from config.security import encriptar_contrasena, codificar_para_almacenamiento
+import calendar
 
 # Crear el engine de SQLAlchemy
 DATABASE_URL = "sqlite:///app.db"
@@ -1582,6 +1583,59 @@ def generar_reporte_consumos_por_mes(mes: int, ano: int):
                 'fecha_maxima_pago': c.fecha_maxima_pago.strftime('%Y-%m-%d'),
                 'numero_orden': numero_orden,
                 'valor_total_pagar': float(c.Valor_total_pagar)
+            })
+
+        return resultado
+    finally:
+        db.close()
+
+
+def generar_reporte_comparativo_consumos_rango(mes_inicio: int, ano_inicio: int, mes_fin: int, ano_fin: int):
+    """Genera datos agregados por cuenta por mes para un rango de meses (inclusive).
+
+    Devuelve una lista de dicts con claves:
+      - cuenta
+      - year
+      - month
+      - valor_total_pagar
+      - consumo_kwh
+
+    Ordenados por cuenta, year, month asc.
+    """
+    from datetime import date
+
+    # Normalizar fechas
+    try:
+        start_date = date(int(ano_inicio), int(mes_inicio), 1)
+        last_day = calendar.monthrange(int(ano_fin), int(mes_fin))[1]
+        end_date = date(int(ano_fin), int(mes_fin), last_day)
+    except Exception:
+        return []
+
+    db = SessionLocal()
+    try:
+        q = db.query(
+            Consumo.cuenta.label('cuenta'),
+            extract('year', Consumo.fecha_maxima_pago).label('year'),
+            extract('month', Consumo.fecha_maxima_pago).label('month'),
+            func.sum(Consumo.Valor_total_pagar).label('valor_total_pagar'),
+            func.sum(Consumo.consumo_kwh).label('consumo_kwh')
+        ).filter(
+            Consumo.fecha_maxima_pago >= start_date,
+            Consumo.fecha_maxima_pago <= end_date
+        ).group_by(Consumo.cuenta, 'year', 'month')
+
+        q = q.order_by(Consumo.cuenta, 'year', 'month')
+        rows = q.all()
+
+        resultado = []
+        for r in rows:
+            resultado.append({
+                'cuenta': int(r.cuenta),
+                'year': int(r.year),
+                'month': int(r.month),
+                'valor_total_pagar': float(r.valor_total_pagar) if r.valor_total_pagar is not None else 0.0,
+                'consumo_kwh': float(r.consumo_kwh) if r.consumo_kwh is not None else 0.0,
             })
 
         return resultado
