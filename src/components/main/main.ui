@@ -202,16 +202,7 @@ color: white;</string>
          </property>
         </widget>
        </item>
-       <item>
-        <widget class="QPushButton" name="btn_usuarios">
-         <property name="text">
-          <string>Gestionar usuarios</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
+       
        <item>
         <widget class="QPushButton" name="btn_cuentas">
          <property name="text">
@@ -272,6 +263,16 @@ color: white;</string>
          </property>
         </widget>
        </item>
+      <item>
+       <widget class="QPushButton" name="btn_usuarios">
+        <property name="text">
+         <string>Gestionar usuarios</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
        <item>
         <spacer name="verticalSpacer">
          <property name="orientation">
