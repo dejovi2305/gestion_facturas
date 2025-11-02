@@ -188,6 +188,14 @@ class BackupsWidget(QWidget):
         if respuesta == QMessageBox.StandardButton.Yes:
             try:
                 ruta = self.backup_manager.crear_backup("hourly")
+                if not ruta:
+                    # Se omitió la creación porque el backup sería idéntico
+                    QMessageBox.information(
+                        self, "Backup omitido",
+                        "No se creó un nuevo backup porque es idéntico al último backup existente."
+                    )
+                    return
+
                 QMessageBox.information(
                     self, "Éxito",
                     f"Backup creado exitosamente:\n{Path(ruta).name}"

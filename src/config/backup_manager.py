@@ -15,6 +15,8 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 import zipfile
+import hashlib
+import tempfile
 
 
 class BackupManager:
@@ -79,29 +81,72 @@ class BackupManager:
         if not self.db_path.exists():
             raise FileNotFoundError(f"Base de datos no encontrada: {self.db_path}")
         
-        # Generar nombre del archivo
+        # Generar nombre del archivo final
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"backup_{tipo}_{timestamp}.db"
         backup_path = self.backup_dir / tipo / backup_name
-        
+
+        # Crear archivo temporal en el mismo directorio para poder comparar
+        tmp_fd, tmp_path_str = tempfile.mkstemp(prefix=f"tmp_backup_{tipo}_", suffix=".db", dir=str(self.backup_dir / tipo))
+        os.close(tmp_fd)
+        tmp_path = Path(tmp_path_str)
+
         try:
-            # Usar SQLite backup API para backup seguro sin bloquear
+            # Usar SQLite backup API para escribir en archivo temporal
             source_conn = sqlite3.connect(str(self.db_path))
-            backup_conn = sqlite3.connect(str(backup_path))
-            
+            backup_conn = sqlite3.connect(str(tmp_path))
+
             with backup_conn:
                 source_conn.backup(backup_conn)
-            
+
             source_conn.close()
             backup_conn.close()
-            
+
+            # Calcular hash del backup temporal
+            def file_hash(path: Path):
+                h = hashlib.sha256()
+                with path.open('rb') as f:
+                    for chunk in iter(lambda: f.read(8192), b''):
+                        h.update(chunk)
+                return h.hexdigest()
+
+            hash_tmp = file_hash(tmp_path)
+
+            # Obtener último backup existente (archivo .db preferido)
+            dir_tipo = self.backup_dir / tipo
+            existing = sorted(
+                [p for p in dir_tipo.glob("backup_*.db") if p.name != tmp_path.name],
+                key=lambda p: p.stat().st_mtime,
+                reverse=True
+            )
+
+            if existing:
+                latest = existing[0]
+                try:
+                    # Comparar tamaños primero (fast path)
+                    if latest.stat().st_size == tmp_path.stat().st_size:
+                        hash_latest = file_hash(latest)
+                        if hash_latest == hash_tmp:
+                            # Identico al último backup, no guardar
+                            tmp_path.unlink(missing_ok=True)
+                            print("→ Backup omitido: idéntico al último backup existente")
+                            return None
+                except Exception:
+                    # Si falla la comparación por cualquier motivo, proceder con guardar
+                    pass
+
+            # No es idéntico: renombrar temporal a nombre final
+            tmp_path.rename(backup_path)
             print(f"✓ Backup creado: {backup_path}")
             return str(backup_path)
-            
+
         except Exception as e:
             print(f"✗ Error al crear backup: {e}")
-            if backup_path.exists():
-                backup_path.unlink()
+            # Limpiar temporal
+            try:
+                tmp_path.unlink()
+            except Exception:
+                pass
             raise
     
     def comprimir_backup(self, backup_path: Path) -> Path:
