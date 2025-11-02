@@ -245,16 +245,16 @@
           </property>
          </widget>
         </item>
-        <item>
-         <widget class="QPushButton" name="btn_exportar">
-          <property name="text">
-           <string>💾 Exportar CSV</string>
-          </property>
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-         </widget>
-        </item>
+  <item>
+   <widget class="QPushButton" name="btn_exportar">
+    <property name="text">
+     <string>💾 Exportar XLSX</string>
+    </property>
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
+   </widget>
+  </item>
        </layout>
       </item>
      </layout>

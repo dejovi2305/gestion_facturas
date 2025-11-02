@@ -1,4 +1,3 @@
-import csv
 from pathlib import Path
 from datetime import date
 from PyQt6.uic import loadUi
@@ -9,6 +8,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtWidgets import QSpinBox
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont, QColor
+from openpyxl import Workbook
 from config.database import (
     generar_reporte_consumos_por_periodo,
     generar_reporte_consumos_por_cuenta,
@@ -69,7 +69,7 @@ class ReportesWidget(QWidget):
         
         # Conectar señales
         self.btn_generar.clicked.connect(self._generar_reporte)
-        self.btn_exportar.clicked.connect(self._exportar_csv)
+        self.btn_exportar.clicked.connect(self._exportar_xlsx)
         self.cmb_tipo_reporte.currentIndexChanged.connect(self._on_tipo_reporte_changed)
         
         # Configurar visibilidad inicial de filtros
@@ -588,3 +588,63 @@ class ReportesWidget(QWidget):
                 self, "Error",
                 f"Error al exportar el reporte: {str(e)}"
             )
+
+    def _exportar_xlsx(self):
+        """Exporta el reporte actual a un archivo .xlsx usando openpyxl."""
+        if not self.datos_reporte:
+            QMessageBox.warning(self, "Advertencia", "No hay datos para exportar")
+            return
+
+        tipo_reporte = self.cmb_tipo_reporte.currentText().replace(' ', '_').lower()
+        nombre_sugerido = f"reporte_{tipo_reporte}_{date.today().strftime('%Y%m%d')}.xlsx"
+
+        ruta, _ = QFileDialog.getSaveFileName(
+            self,
+            "Guardar Reporte XLSX",
+            nombre_sugerido,
+            "Archivos Excel (*.xlsx)"
+        )
+
+        if not ruta:
+            return
+
+        try:
+            wb = Workbook()
+            ws = wb.active
+
+            # Escribir headers (usamos headers_reporte como títulos visibles)
+            headers = [h for h in self.headers_reporte]
+            ws.append(headers)
+
+            # Escribir filas (usar claves mapeadas)
+            keys = [self._header_to_key(h) for h in self.headers_reporte]
+            for row in self.datos_reporte:
+                values = []
+                for k in keys:
+                    v = row.get(k, '')
+                    # Dejar números como números
+                    if isinstance(v, (int, float)):
+                        values.append(v)
+                    else:
+                        values.append(str(v))
+                ws.append(values)
+
+            # Si contiene valor_total_pagar, añadir fila TOTAL al final
+            try:
+                if 'valor_total_pagar' in keys:
+                    total = sum(float(d.get('valor_total_pagar', 0) or 0) for d in self.datos_reporte)
+                    total_row = ['' for _ in keys]
+                    total_row[0] = 'TOTAL'
+                    # Poner total en la columna correspondiente
+                    idx = keys.index('valor_total_pagar')
+                    total_row[idx] = float(total)
+                    ws.append(total_row)
+            except Exception:
+                pass
+
+            # Guardar archivo
+            wb.save(ruta)
+
+            QMessageBox.information(self, "Éxito", f"Reporte exportado exitosamente a:\n{ruta}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al exportar el reporte: {str(e)}")
