@@ -7,8 +7,12 @@ from PyQt6.QtWidgets import (
     QDateEdit,
     QVBoxLayout,
     QLineEdit,
+    QComboBox,
+    QCheckBox,
 )
 from PyQt6.QtCore import QDate
+from config.database import listar_ordenes_pago, obtener_nombre_mes
+from datetime import date
 
 
 class ConsumoDialog(QDialog):
@@ -23,35 +27,30 @@ class ConsumoDialog(QDialog):
     - valor_total (float, 2 decimales)
     - valor_total_pagar (float, 2 decimales)
     - intereses_mora (float, 2 decimales)
-    - numero_orden (int)
+    - orden_pago_id (int) - Seleccionado desde combo de órdenes
     """
 
     def __init__(
         self,
         parent=None,
         *,
-    cufe: str | None = None,
-    consumo_kwh: int | float | None = None,
+        cufe: str | None = None,
+        consumo_kwh: int | float | None = None,
         valor_kwh: float | None = None,
         valor_kwh_subsidiado: float | None = None,
         fecha_maxima_pago: str | None = None,  # YYYY-MM-DD
         valor_total: float | None = None,
         valor_total_pagar: float | None = None,
         intereses_mora: float | None = None,
-        numero_orden: int | None = None,
+        orden_pago_id: int | None = None,
+        pago_realizado: bool = False,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Revisar Consumo")
+        self.setMinimumWidth(600)
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
-
-        # CUFE/UUID
-        self.txt_cufe = QLineEdit(self)
-        self.txt_cufe.setMaxLength(128)
-        if cufe:
-            self.txt_cufe.setText(str(cufe))
-        form.addRow("CUFE / UUID", self.txt_cufe)
 
         # Consumo kWh
         self.sp_consumo = QSpinBox(self)
@@ -99,6 +98,28 @@ class ConsumoDialog(QDialog):
             self.dt_fecha.setDate(QDate.currentDate())
         form.addRow("Fecha máxima de pago", self.dt_fecha)
 
+        # Mes de pago (read-only, calculado desde la fecha)
+        self.txt_mes_pago = QLineEdit(self)
+        self.txt_mes_pago.setReadOnly(True)
+        # Inicializar mes según la fecha actual/seleccionada
+        qd_init = self.dt_fecha.date()
+        try:
+            init_py_date = date(qd_init.year(), qd_init.month(), qd_init.day())
+            self.txt_mes_pago.setText(obtener_nombre_mes(init_py_date))
+        except Exception:
+            self.txt_mes_pago.setText("")
+        form.addRow("Mes pago", self.txt_mes_pago)
+
+        # Actualizar mes cuando el usuario cambie la fecha
+        def _on_fecha_changed(qdate):
+            try:
+                py_date = date(qdate.year(), qdate.month(), qdate.day())
+                self.txt_mes_pago.setText(obtener_nombre_mes(py_date))
+            except Exception:
+                self.txt_mes_pago.setText("")
+
+        self.dt_fecha.dateChanged.connect(_on_fecha_changed)
+
         # Valor total
         self.sp_valor_total = QDoubleSpinBox(self)
         self.sp_valor_total.setRange(0.0, 1_000_000_000.0)
@@ -132,15 +153,39 @@ class ConsumoDialog(QDialog):
                 pass
         form.addRow("Intereses de mora (COP)", self.sp_mora)
 
-        # Número de orden
-        self.sp_orden = QSpinBox(self)
-        self.sp_orden.setRange(0, 1_000_000_000)
-        if numero_orden is not None:
-            try:
-                self.sp_orden.setValue(int(numero_orden))
-            except Exception:
-                pass
-        form.addRow("Número de orden", self.sp_orden)
+        # Orden de pago (combo)
+        self.combo_orden_pago = QComboBox(self)
+        self.combo_orden_pago.setMinimumWidth(250)
+        ordenes = listar_ordenes_pago()
+        for orden in ordenes:
+            # Mostrar: "Orden #123 - $1,234.56"
+            texto = f"Orden #{orden.numero_orden} - ${float(orden.valor):.2f}"
+            self.combo_orden_pago.addItem(texto, orden.id)
+        
+        # Seleccionar orden por defecto (orden semilla o la especificada)
+        if orden_pago_id is not None:
+            index = self.combo_orden_pago.findData(orden_pago_id)
+            if index >= 0:
+                self.combo_orden_pago.setCurrentIndex(index)
+        else:
+            # Buscar la orden semilla (id=1)
+            index = self.combo_orden_pago.findData(1)
+            if index >= 0:
+                self.combo_orden_pago.setCurrentIndex(index)
+        
+        form.addRow("Orden de pago", self.combo_orden_pago)
+        
+        # Pago realizado (checkbox)
+        self.chk_pago_realizado = QCheckBox("Pago realizado", self)
+        self.chk_pago_realizado.setChecked(pago_realizado)
+        form.addRow("Estado", self.chk_pago_realizado)
+        
+        # CUFE/UUID
+        self.txt_cufe = QLineEdit(self)
+        self.txt_cufe.setMaxLength(128)
+        if cufe:
+            self.txt_cufe.setText(str(cufe))
+        form.addRow("CUFE / UUID", self.txt_cufe)
 
         layout.addLayout(form)
 
@@ -157,13 +202,15 @@ class ConsumoDialog(QDialog):
         qd = self.dt_fecha.date()
         fecha = f"{qd.year():04d}-{qd.month():02d}-{qd.day():02d}"
         return {
-            "cufe": self.txt_cufe.text().strip(),
             "consumo_kwh": int(self.sp_consumo.value()),
             "valor_kwh": float(self.sp_valor_kwh.value()),
             "valor_kwh_subsidiado": float(self.sp_valor_kwh_sub.value()),
             "fecha_maxima_pago": fecha,
+            "mes_pago": self.txt_mes_pago.text().strip(),
             "valor_total": float(self.sp_valor_total.value()),
             "valor_total_pagar": float(self.sp_valor_total_pagar.value()),
             "intereses_mora": float(self.sp_mora.value()),
-            "numero_orden": int(self.sp_orden.value()),
+            "orden_pago_id": self.combo_orden_pago.currentData(),
+            "cufe": self.txt_cufe.text().strip(),
+            "pago_realizado": self.chk_pago_realizado.isChecked(),
         }

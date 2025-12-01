@@ -1,8 +1,18 @@
 import os, sys
 from PyQt6.QtWidgets import QMainWindow, QPushButton, QMessageBox
 from PyQt6.QtGui import QPixmap, QIcon
+from PyQt6.QtCore import QTimer
 from PyQt6.uic import loadUi
 from components.facturar.cargar_factura import CargarFacturaWidget
+from components.cuentas.cuentas import CuentasWidget
+from components.clientes.clientes import ClientesWidget
+from components.usuarios.usuarios import UsuariosWidget
+from components.consumos.consumos import ConsumosWidget
+from components.ordenes_pago.ordenes_pago import OrdenesPagoWidget
+from components.reportes.reportes import ReportesWidget
+from components.alertas.alertas import AlertasWidget
+from components.backups.backups import BackupsWidget
+from components.alertas.dialogo_vencimientos import mostrar_alertas_si_existen
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -30,9 +40,9 @@ class MainWindow(QMainWindow):
         self._menu_buttons = [
             getattr(self, name)
             for name in [
-                'btn_cargar_factura', 'btn_gestionar_factura', 'btn_usuarios',
+                'btn_cargar_factura', 'btn_usuarios',
                 'btn_cuentas', 'btn_clientes', 'btn_consumos',
-                'btn_ordenes_pago', 'btn_reportes', 'btn_alertas'
+                'btn_ordenes_pago', 'btn_reportes', 'btn_alertas', 'btn_backups'
             ]
             if hasattr(self, name)
         ]
@@ -49,6 +59,17 @@ class MainWindow(QMainWindow):
         # Conectar botón de salir
         if hasattr(self, 'btn_salir'):
             self.btn_salir.clicked.connect(self._on_salir)
+        
+        # Mostrar alertas después de que la ventana se haya mostrado
+        QTimer.singleShot(500, self._mostrar_alertas_inicio)
+    
+    def _mostrar_alertas_inicio(self):
+        """Muestra el diálogo de alertas de vencimiento al iniciar."""
+        try:
+            mostrar_alertas_si_existen(self)
+        except Exception as e:
+            # No bloquear la aplicación si hay error al mostrar alertas
+            print(f"Error al mostrar alertas: {e}")
     
     def _init_pages(self):
         """Inicializar las páginas del stackedWidget."""
@@ -64,6 +85,38 @@ class MainWindow(QMainWindow):
         # Agregar página de cargar factura
         self.page_cargar_factura = CargarFacturaWidget()
         self.stackedPages.addWidget(self.page_cargar_factura)
+
+        # Agregar página de cuentas
+        self.page_cuentas = CuentasWidget()
+        self.stackedPages.addWidget(self.page_cuentas)
+
+        # Agregar página de clientes
+        self.page_clientes = ClientesWidget()
+        self.stackedPages.addWidget(self.page_clientes)
+
+        # Agregar página de usuarios
+        self.page_usuarios = UsuariosWidget()
+        self.stackedPages.addWidget(self.page_usuarios)
+
+        # Agregar página de consumos
+        self.page_consumos = ConsumosWidget()
+        self.stackedPages.addWidget(self.page_consumos)
+
+        # Agregar página de órdenes de pago
+        self.page_ordenes_pago = OrdenesPagoWidget()
+        self.stackedPages.addWidget(self.page_ordenes_pago)
+
+        # Agregar página de reportes
+        self.page_reportes = ReportesWidget()
+        self.stackedPages.addWidget(self.page_reportes)
+
+        # Agregar página de alertas
+        self.page_alertas = AlertasWidget()
+        self.stackedPages.addWidget(self.page_alertas)
+
+        # Agregar página de backups
+        self.page_backups = BackupsWidget()
+        self.stackedPages.addWidget(self.page_backups)
 
     def _on_menu_clicked(self):
         sender = self.sender()
@@ -84,6 +137,14 @@ class MainWindow(QMainWindow):
         # Mapeo de botones a índices de páginas
         page_map = {
             'btn_cargar_factura': 1,  # Índice de la página de cargar factura
+            'btn_cuentas': 2,         # Índice de la página de cuentas
+            'btn_clientes': 3,        # Índice de la página de clientes
+            'btn_usuarios': 4,        # Índice de la página de usuarios
+            'btn_consumos': 5,        # Índice de la página de consumos
+            'btn_ordenes_pago': 6,    # Índice de la página de órdenes de pago
+            'btn_reportes': 7,        # Índice de la página de reportes
+            'btn_alertas': 8,         # Índice de la página de alertas
+            'btn_backups': 9,         # Índice de la página de backups
         }
         
         button_name = button.objectName()
@@ -92,19 +153,35 @@ class MainWindow(QMainWindow):
         self.stackedPages.setCurrentIndex(page_index)
 
     def set_user(self, nombre: str | None, avatar_path: str | None = None):
-        """Mostrar el nombre de usuario y avatar en el encabezado del menú."""
+        """Mostrar el nombre de usuario y avatar en el encabezado del menú.
+        
+        También configura la visibilidad del botón de usuarios según el rol.
+        Solo el usuario 'admin' puede ver la opción de gestionar usuarios.
+        """
         try:
             if hasattr(self, 'lbl_user_name') and nombre:
                 self.lbl_user_name.setText(nombre)
+
+            # Configurar visibilidad del botón de usuarios (solo para admin)
+            if hasattr(self, 'btn_usuarios'):
+                is_admin = nombre and nombre.lower() == 'admin'
+                self.btn_usuarios.setVisible(is_admin)
+                
+                # Si el usuario no es admin y está en la página de usuarios, redirigir a home
+                if not is_admin and hasattr(self, 'stackedPages'):
+                    if self.stackedPages.currentIndex() == 4:  # Índice de página de usuarios
+                        self.stackedPages.setCurrentIndex(0)
+                        if self._menu_buttons:
+                            self._set_active_button(self._menu_buttons[0])
 
             # Resolver ruta por defecto de avatar
             if not avatar_path:
                 if getattr(sys, 'frozen', False):
                     base = sys._MEIPASS
-                    avatar_path = os.path.join(base, 'src', 'assets', 'icon.ico')
+                    avatar_path = os.path.join(base, 'src', 'assets', 'profile.png')
                 else:
                     src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-                    avatar_path = os.path.join(src_dir, 'assets', 'icon.ico')
+                    avatar_path = os.path.join(src_dir, 'assets', 'profile.png')
 
             if hasattr(self, 'avatar') and os.path.exists(avatar_path):
                 pix = QPixmap(avatar_path)

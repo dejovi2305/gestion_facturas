@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ReportesWidget</class>
+ <widget class="QWidget" name="ReportesWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>800</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_root">
+   <item>
+    <widget class="QLabel" name="lbl_titulo">
+     <property name="text">
+      <string>📊 Generación de Reportes</string>
+     </property>
+       <property name="styleSheet">
+        <string>font-size: 16px; font-weight: bold;</string>
+       </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="grp_filtros">
+     <property name="title">
+      <string>Configuración del Reporte</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <item>
+       <layout class="QFormLayout" name="formLayout">
+        <item row="0" column="0">
+         <widget class="QLabel" name="lbl_tipo">
+          <property name="text">
+           <string>Tipo de Reporte:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QComboBox" name="cmb_tipo_reporte">
+          <item>
+           <property name="text">
+            <string>Consumos por Período</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Consumos por Cuenta</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Consumos por Orden de Pago</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Resumen de Cuentas</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Listado de Clientes</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Órdenes de Pago</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Valor Total a Pagar por Mes</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Consumos del Mes</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Comparativo mensual por cuenta</string>
+           </property>
+          </item>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="lbl_fecha_inicio">
+          <property name="text">
+           <string>Fecha Inicio:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QDateEdit" name="dt_fecha_inicio">
+          <property name="displayFormat">
+           <string>yyyy-MM-dd</string>
+          </property>
+          <property name="calendarPopup">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="lbl_fecha_fin">
+          <property name="text">
+           <string>Fecha Fin:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QDateEdit" name="dt_fecha_fin">
+          <property name="displayFormat">
+           <string>yyyy-MM-dd</string>
+          </property>
+          <property name="calendarPopup">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="lbl_cuenta">
+          <property name="text">
+           <string>Cuenta (opcional):</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QComboBox" name="cmb_cuenta">
+          <property name="editable">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+  <item row="4" column="0">
+   <widget class="QLabel" name="lbl_mes">
+    <property name="text">
+     <string>Mes:</string>
+    </property>
+   </widget>
+  </item>
+  <item row="4" column="1">
+   <widget class="QComboBox" name="cmb_mes">
+    <item>
+     <property name="text">
+      <string>Enero</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Febrero</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Marzo</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Abril</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Mayo</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Junio</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Julio</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Agosto</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Septiembre</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Octubre</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Noviembre</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Diciembre</string>
+     </property>
+    </item>
+   </widget>
+  </item>
+  <item row="5" column="0">
+   <widget class="QLabel" name="lbl_ano">
+    <property name="text">
+     <string>Año:</string>
+    </property>
+   </widget>
+  </item>
+  <item row="5" column="1">
+   <widget class="QSpinBox" name="spn_ano">
+    <property name="minimum">
+     <number>2000</number>
+    </property>
+    <property name="maximum">
+     <number>2099</number>
+    </property>
+   </widget>
+  </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_botones">
+        <item>
+         <spacer name="horizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btn_generar">
+          <property name="text">
+           <string>📊 Generar Vista Previa</string>
+          </property>
+         </widget>
+        </item>
+  <item>
+   <widget class="QPushButton" name="btn_exportar">
+    <property name="text">
+     <string>💾 Exportar XLSX</string>
+    </property>
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
+   </widget>
+  </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="lbl_vista_previa">
+     <property name="text">
+      <string>Vista Previa del Reporte</string>
+     </property>
+     <property name="styleSheet">
+      <string>font-weight: bold;</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTableWidget" name="tbl_vista_previa">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+       <horstretch>0</horstretch>
+       <verstretch>1</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="editTriggers">
+      <set>QAbstractItemView::NoEditTriggers</set>
+     </property>
+     <property name="selectionBehavior">
+      <enum>QAbstractItemView::SelectRows</enum>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="lbl_info">
+     <property name="text">
+      <string>Selecciona un tipo de reporte y haz clic en "Generar Vista Previa"</string>
+     </property>
+     <property name="styleSheet">
+      <string>color: gray; font-style: italic;</string>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

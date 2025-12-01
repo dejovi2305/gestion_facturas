@@ -110,8 +110,8 @@ QPushButton#btn_salir {color:#fca5a5;}
            <widget class="QLabel" name="avatar">
             <property name="minimumSize">
              <size>
-              <width>48</width>
-              <height>48</height>
+              <width>60</width>
+              <height>60</height>
              </size>
             </property>
             <property name="maximumSize">
@@ -122,6 +122,9 @@ QPushButton#btn_salir {color:#fca5a5;}
             </property>
             <property name="styleSheet">
              <string notr="true">border-radius:24px;</string>
+            </property>
+            <property name="pixmap">
+             <pixmap>../../assets/profile.png</pixmap>
             </property>
             <property name="scaledContents">
              <bool>true</bool>
@@ -199,29 +202,7 @@ color: white;</string>
          </property>
         </widget>
        </item>
-       <item>
-        <widget class="QPushButton" name="btn_gestionar_factura">
-         <property name="styleSheet">
-          <string notr="true">border-radius: 0;</string>
-         </property>
-         <property name="text">
-          <string>Gestionar factura</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="btn_usuarios">
-         <property name="text">
-          <string>Gestionar usuarios</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
+       
        <item>
         <widget class="QPushButton" name="btn_cuentas">
          <property name="text">
@@ -282,6 +263,16 @@ color: white;</string>
          </property>
         </widget>
        </item>
+      <item>
+       <widget class="QPushButton" name="btn_usuarios">
+        <property name="text">
+         <string>Gestionar usuarios</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
        <item>
         <spacer name="verticalSpacer">
          <property name="orientation">
@@ -294,6 +285,16 @@ color: white;</string>
           </size>
          </property>
         </spacer>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btn_backups">
+         <property name="text">
+          <string>Gestionar Backups</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
        </item>
        <item>
         <widget class="QPushButton" name="btn_salir">
